@@ -1,0 +1,125 @@
+package com.example.chatgptwatchrelay.accessibility
+
+import android.accessibilityservice.AccessibilityService
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Bundle
+import android.view.accessibility.AccessibilityNodeInfo
+import com.example.chatgptwatchrelay.launch.ChatGptLauncher
+import com.example.chatgptwatchrelay.relay.RelayState
+
+object ChatGptCommandSender {
+    private data class PendingCommand(
+        val text: String,
+        val source: String,
+        val createdAtMillis: Long = System.currentTimeMillis(),
+        var pasted: Boolean = false
+    )
+
+    private var pendingCommand: PendingCommand? = null
+
+    fun queueCommand(context: Context, text: String, source: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+
+        copyToClipboard(context, trimmed, source)
+        pendingCommand = PendingCommand(text = trimmed, source = source)
+        RelayState.monitoringEnabled = true
+        ChatGptLauncher.open(context)
+    }
+
+    fun hasPendingCommand(): Boolean = pendingCommand != null
+
+    fun clearPendingCommand() {
+        pendingCommand = null
+    }
+
+    fun trySendPendingCommand(service: AccessibilityService): Boolean {
+        val pending = pendingCommand ?: return false
+        val root = service.rootInActiveWindow ?: return false
+
+        if (!pending.pasted) {
+            val inputNode = findBestInputNode(root) ?: return false
+            inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+
+            val pasted = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            val setText = if (!pasted) {
+                val args = Bundle().apply {
+                    putCharSequence(
+                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                        pending.text
+                    )
+                }
+                inputNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            } else {
+                false
+            }
+
+            if (pasted || setText) {
+                pending.pasted = true
+            } else {
+                return false
+            }
+        }
+
+        val sendNode = findSendNode(service.rootInActiveWindow ?: root) ?: return false
+        val clicked = sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (clicked) {
+            pendingCommand = null
+            RelayState.monitoringEnabled = true
+        }
+        return clicked
+    }
+
+    private fun copyToClipboard(context: Context, text: String, source: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("ChatGPT $source", text))
+    }
+
+    private fun findBestInputNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val candidates = mutableListOf<AccessibilityNodeInfo>()
+        root.visit { node ->
+            val className = node.className?.toString().orEmpty()
+            val text = node.text?.toString().orEmpty()
+            val hint = node.hintText?.toString().orEmpty()
+            val desc = node.contentDescription?.toString().orEmpty()
+            val looksLikeMessageBox = listOf(text, hint, desc).any {
+                it.contains("message", ignoreCase = true) ||
+                    it.contains("ask", ignoreCase = true) ||
+                    it.contains("prompt", ignoreCase = true)
+            }
+
+            if ((node.isEditable || className.contains("EditText", ignoreCase = true) || looksLikeMessageBox) && node.isVisibleToUser) {
+                candidates += node
+            }
+        }
+        return candidates.lastOrNull()
+    }
+
+    private fun findSendNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val candidates = mutableListOf<AccessibilityNodeInfo>()
+        root.visit { node ->
+            if (!node.isVisibleToUser || !node.isClickable) return@visit
+            val text = node.text?.toString().orEmpty()
+            val desc = node.contentDescription?.toString().orEmpty()
+            val label = "$text $desc"
+            if (label.contains("send", ignoreCase = true) || label.contains("submit", ignoreCase = true)) {
+                candidates += node
+            }
+        }
+        return candidates.lastOrNull()
+    }
+
+    private inline fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
+        fun recurse(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            block(node)
+            for (i in 0 until node.childCount) {
+                recurse(node.getChild(i))
+            }
+        }
+        recurse(this)
+    }
+}
