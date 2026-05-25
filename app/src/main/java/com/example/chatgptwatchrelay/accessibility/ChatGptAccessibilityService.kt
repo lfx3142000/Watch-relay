@@ -24,6 +24,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
         val snapshot = ChatGptScreenReader.read(rootInActiveWindow)
         RelayDiagnostics.updateScreenSnapshot(packageName, snapshot.allVisibleText)
         val responseText = snapshot.likelyLatestResponse.trim()
+        RelayDiagnostics.updateLikelyResponse(responseText, snapshot.responseLineCount)
         if (responseText.length < 20) return
 
         if (responseText == lastObservedResponse) {
