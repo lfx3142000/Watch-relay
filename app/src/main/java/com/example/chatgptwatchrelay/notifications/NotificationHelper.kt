@@ -40,13 +40,15 @@ object NotificationHelper {
             .setContentTitle("ChatGPT done — $index/$total")
             .setContentText(text.take(120))
             .setStyle(android.app.Notification.BigTextStyle().bigText(text))
-            .setAutoCancel(false)
+            .setAutoCancel(true)
             .setOngoing(false)
+            .setDeleteIntent(pendingIntent(context, CommandRepository.ACTION_DISMISS))
             .addAction(action(context, CommandRepository.ACTION_MORE, "More"))
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_SUMMARIZE, "Summarize"))
             .addAction(action(context, CommandRepository.ACTION_SHORTER, "Shorter"))
-            .addAction(action(context, CommandRepository.ACTION_OPEN, "Open"))
+            .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop"))
+            .addAction(action(context, CommandRepository.ACTION_DISMISS, "Dismiss"))
             .addAction(replyAction(context))
 
         context.getSystemService(NotificationManager::class.java)
@@ -69,14 +71,17 @@ object NotificationHelper {
     }
 
     private fun action(context: Context, action: String, label: String): android.app.Notification.Action {
+        return android.app.Notification.Action.Builder(android.R.drawable.ic_menu_send, label, pendingIntent(context, action)).build()
+    }
+
+    private fun pendingIntent(context: Context, action: String): PendingIntent {
         val intent = Intent(context, CommandReceiver::class.java).setAction(action)
-        val pendingIntent = PendingIntent.getBroadcast(
+        return PendingIntent.getBroadcast(
             context,
             action.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        return android.app.Notification.Action.Builder(android.R.drawable.ic_menu_send, label, pendingIntent).build()
     }
 
     private fun replyAction(context: Context): android.app.Notification.Action {
