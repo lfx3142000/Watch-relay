@@ -6,7 +6,7 @@
 **Repository:** `lfx3142000/Watch-relay`  
 **Goal:** Build an Android phone app that automatically detects when ChatGPT finishes responding, sends the readable response to a Samsung Galaxy Watch, and lets the user send preset or voice/custom replies from the watch back into the same ChatGPT conversation.
 
-**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender now queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. This still needs real-device testing and more robust ChatGPT UI detection.
+**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It now includes retry/timeout handling and posts a failure notification if the command cannot be sent. This still needs real-device testing and more robust ChatGPT UI detection.
 
 **Critical MVP decision:** The MVP must include an automatic relay loop. Manual share/copy is allowed only as a fallback/debug path, not as the primary MVP.
 
@@ -67,7 +67,7 @@ Mostly complete. CI build passed after JVM target fix.
 - [ ] Confirm project opens in Android Studio.
 - [ ] Confirm app builds locally.
 - [x] Confirm app builds in GitHub Actions CI. Run `26391318581` passed.
-- [ ] Add Gradle wrapper files or document Android Studio/Gradle setup.
+- [x] Document normal Android build workflow in README.
 
 ## Acceptance criteria
 
@@ -211,10 +211,10 @@ Started.
 - [x] Add notification action: `More`.
 - [x] Add notification action: `Continue`.
 - [x] Add notification action: `Summarize`.
-- [ ] Add notification action: `Shorter`.
-- [ ] Add notification action: `Open`.
+- [x] Add notification action: `Shorter`.
+- [x] Add notification action: `Open`.
 - [x] Add notification action: `Reply` using RemoteInput.
-- [ ] Add final chunk state: `End of response`.
+- [x] Add final chunk state: `End of response`.
 - [x] Add fallback for short responses.
 
 ---
@@ -240,7 +240,8 @@ Implemented first-pass auto-send path; needs real-device testing and better diag
 - [x] Paste command into the message input or use `ACTION_SET_TEXT` fallback.
 - [x] Find and tap a likely Send control.
 - [x] Restart response monitoring after send.
-- [ ] Add failure notification if command could not be sent.
+- [x] Add retry and timeout handling for pending command sends.
+- [x] Add failure notification if command could not be sent.
 - [ ] Add diagnostics for detected input/send candidates.
 - [ ] Real-device test: Continue from watch sends into ChatGPT.
 - [ ] Real-device test: Summarize from watch sends into ChatGPT.
@@ -266,6 +267,7 @@ Implemented first-pass auto-send path; needs real-device testing.
 - [x] Tap likely Send control.
 - [x] Restart monitoring after send.
 - [x] Add basic user-visible error if inline reply is unavailable.
+- [x] Add retry/timeout fallback through shared command sender.
 - [ ] Real-device test: watch shows a reply option.
 - [ ] Real-device test: dictated reply is received and sent into ChatGPT.
 
@@ -273,4 +275,4 @@ Implemented first-pass auto-send path; needs real-device testing.
 
 # Current next step
 
-Run CI after `ChatGptCommandSender.kt` changes. If compile passes, add an APK artifact upload to the workflow, then begin real-device testing of: notification permission, Accessibility permission, test watch notification, automatic stable-text notification, More, Continue, Summarize, and inline Reply.
+Run normal Android Build on `main` after retry/timeout handling. If compile passes, add diagnostics for Accessibility detection: detected package name, visible text node count, likely input candidate count, and likely send button candidate count.
