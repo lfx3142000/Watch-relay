@@ -26,6 +26,32 @@ The MVP is automation-first:
 
 Initial Android project shell and relay plumbing are in progress. See [`TASKS.md`](TASKS.md) for the full build plan and status.
 
-## Build check
+## Normal build workflow
 
-A GitHub Actions workflow is present at `.github/workflows/android-build.yml` and is intended to run `gradle :app:assembleDebug --stacktrace`.
+The repository has a GitHub Actions workflow at `.github/workflows/android-build.yml`.
+
+It runs automatically on:
+
+- pushes to `main`
+- pull requests targeting `main`
+- manual `workflow_dispatch` runs from the GitHub Actions tab
+
+The workflow runs:
+
+```bash
+gradle :app:assembleDebug --stacktrace
+```
+
+Successful runs upload a downloadable artifact named:
+
+```text
+chatgpt-watch-relay-debug-apk
+```
+
+The APK inside the artifact ZIP is:
+
+```text
+app-debug.apk
+```
+
+Future compile checks should use the normal `main` workflow or the manual **Run workflow** button. Temporary CI trigger branches are no longer needed.
