@@ -3,7 +3,6 @@ package com.example.chatgptwatchrelay
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -14,9 +13,12 @@ import android.widget.TextView
 import android.widget.Toast
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
 import com.example.chatgptwatchrelay.notifications.NotificationHelper
+import com.example.chatgptwatchrelay.relay.RelayDiagnostics
 import com.example.chatgptwatchrelay.relay.RelayState
 
 class MainActivity : Activity() {
+    private lateinit var diagnosticsText: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildLayout())
@@ -45,21 +47,26 @@ class MainActivity : Activity() {
         container.addView(button("Start Monitoring") {
             RelayState.monitoringEnabled = true
             Toast.makeText(this, "Monitoring enabled", Toast.LENGTH_SHORT).show()
+            refreshDiagnostics()
         })
         container.addView(button("Stop Monitoring") {
             RelayState.monitoringEnabled = false
             Toast.makeText(this, "Monitoring stopped", Toast.LENGTH_SHORT).show()
+            refreshDiagnostics()
         })
         container.addView(button("Send Test Watch Notification") {
-            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, or Reply from the notification actions.")
+            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Open, or Reply from the notification actions.")
             NotificationHelper.showResponseNotification(this)
+            refreshDiagnostics()
         })
+        container.addView(button("Refresh Diagnostics") { refreshDiagnostics() })
 
-        container.addView(TextView(this).apply {
-            text = "Current implementation status:\n- Notification and watch actions are scaffolded.\n- Accessibility service is scaffolded.\n- Full ChatGPT extraction and auto-send are next."
+        diagnosticsText = TextView(this).apply {
+            text = diagnosticsSummary()
             textSize = 14f
             setPadding(0, 24, 0, 0)
-        })
+        }
+        container.addView(diagnosticsText)
 
         return ScrollView(this).apply { addView(container) }
     }
@@ -67,6 +74,21 @@ class MainActivity : Activity() {
     private fun button(label: String, onClick: () -> Unit): Button = Button(this).apply {
         text = label
         setOnClickListener { onClick() }
+    }
+
+    private fun refreshDiagnostics() {
+        if (::diagnosticsText.isInitialized) {
+            diagnosticsText.text = diagnosticsSummary()
+        }
+    }
+
+    private fun diagnosticsSummary(): String = buildString {
+        appendLine("Status:")
+        appendLine("Monitoring: ${if (RelayState.monitoringEnabled) "Active" else "Stopped"}")
+        appendLine("Captured chunks: ${RelayState.chunks.size}")
+        appendLine()
+        appendLine("Diagnostics:")
+        append(RelayDiagnostics.summary())
     }
 
     private fun requestNotificationPermission() {
