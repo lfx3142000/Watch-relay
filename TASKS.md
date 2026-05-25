@@ -6,7 +6,7 @@
 **Repository:** `lfx3142000/Watch-relay`  
 **Goal:** Build an Android phone app that automatically detects when ChatGPT finishes responding, sends the readable response to a Samsung Galaxy Watch, and lets the user send preset or voice/custom replies from the watch back into the same ChatGPT conversation.
 
-**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It includes retry/timeout handling and posts a failure notification if the command cannot be sent. The app now records and displays basic diagnostics for package, captured text, input candidates, send candidates, and command status. This still needs real-device testing and more robust ChatGPT UI detection.
+**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It includes retry/timeout handling and posts a failure notification if the command cannot be sent. The app records and displays basic diagnostics for package, captured text, likely response text, input candidates, send candidates, and command status. A first-pass `ChatGptScreenReader` now filters common UI chrome and uses a tail-of-conversation heuristic to extract likely latest response text instead of sending all visible screen text. This still needs real-device testing and more robust ChatGPT UI detection.
 
 **Critical MVP decision:** The MVP must include an automatic relay loop. Manual share/copy is allowed only as a fallback/debug path, not as the primary MVP.
 
@@ -95,6 +95,7 @@ In progress.
 - `app/src/main/java/com/example/chatgptwatchrelay/MainActivity.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/accessibility/ChatGptAccessibilityService.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/accessibility/ChatGptCommandSender.kt`
+- `app/src/main/java/com/example/chatgptwatchrelay/accessibility/ChatGptScreenReader.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/NotificationHelper.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/CommandReceiver.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/ReplyReceiver.kt`
@@ -142,7 +143,7 @@ Started.
 - [x] Capture accessibility node tree text while ChatGPT/browser is visible.
 - [x] Add relay monitoring state: active/inactive.
 - [x] Add pending-command handling before response monitoring.
-- [x] Add debug screen/log showing detected package, screen text count, and candidate input/send nodes.
+- [x] Add debug screen/log showing detected package, screen text count, likely response count, and candidate input/send nodes.
 - [ ] Add safe throttling so the service does not over-scan. Current approach uses event-driven updates and simple stability count only.
 - [ ] Add error state if ChatGPT screen is not detectable.
 - [ ] Add privacy warning that captured screen text is processed locally.
@@ -159,11 +160,11 @@ Started, but still crude.
 
 - [ ] Create dedicated `ChatGptUiStateDetector.kt`.
 - [ ] Define formal states: `UNKNOWN`, `IDLE`, `GENERATING`, `COMPLETE_CANDIDATE`, `COMPLETE_CONFIRMED`, `ERROR`.
-- [x] Track changes in visible text over time in the Accessibility Service.
+- [x] Track changes in likely latest response text over time in the Accessibility Service.
 - [ ] Detect likely generating state explicitly.
-- [x] Detect likely completed state after response text is stable for several accessibility events.
+- [x] Detect likely completed state after likely response text is stable for several accessibility events.
 - [ ] Make stability delay configurable.
-- [x] Avoid sending duplicate notifications for the same response using a response fingerprint.
+- [x] Avoid sending duplicate notifications for the same likely response using a response fingerprint.
 - [x] Store a fingerprint/hash of the last notified response.
 - [x] Add debug display of current detected state through diagnostics summary.
 
@@ -173,21 +174,20 @@ Started, but still crude.
 
 ## Status
 
-Not complete. Current implementation captures all visible accessible text as a placeholder.
+Started. Current implementation is heuristic and needs real-device tuning.
 
 ## Tasks
 
-- [ ] Create `ChatGptScreenReader.kt`.
-- [ ] Identify likely assistant response text from accessibility node tree.
-- [ ] Prefer the most recent assistant message.
-- [ ] Exclude user prompt text where possible.
-- [ ] Exclude input box text.
-- [ ] Exclude navigation/sidebar text.
-- [ ] Normalize whitespace.
-- [x] Store latest full response locally in memory.
+- [x] Create `ChatGptScreenReader.kt`.
+- [x] Identify likely assistant response text from accessibility node tree using UI-line filtering and tail-of-conversation heuristic.
+- [ ] Prefer the most recent assistant message using stronger role/message-boundary detection.
+- [x] Exclude common navigation/sidebar/button text where possible.
+- [x] Exclude common input box text where possible.
+- [x] Normalize whitespace.
+- [x] Store latest full likely response locally in memory.
 - [x] Store response fingerprint.
-- [x] Add debug view of extracted response preview via diagnostics/last chunk count.
-- [ ] Add fallback extraction strategy for Chrome web UI.
+- [x] Add debug view of extracted response preview via diagnostics/likely response counts.
+- [ ] Add fallback extraction strategy for Chrome web UI after real accessibility data is observed.
 - [x] Add fallback manual share path for failures.
 
 ---
@@ -277,4 +277,4 @@ Implemented first-pass auto-send path; needs real-device testing.
 
 # Current next step
 
-Run normal Android Build on `main` after diagnostics changes. If compile passes, proceed to real-device testing and then improve latest-response extraction so the app captures the assistant response instead of all visible ChatGPT screen text.
+Run normal Android Build on `main` after screen-reader changes. If compile passes, proceed to real-device testing and use diagnostics to tune `ChatGptScreenReader` against the actual ChatGPT app and Chrome accessibility node text.
