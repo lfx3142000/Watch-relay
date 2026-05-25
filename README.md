@@ -25,3 +25,7 @@ The MVP is automation-first:
 ## Current status
 
 Initial Android project shell and relay plumbing are in progress. See [`TASKS.md`](TASKS.md) for the full build plan and status.
+
+## Build check
+
+A GitHub Actions workflow is present at `.github/workflows/android-build.yml` and is intended to run `gradle :app:assembleDebug --stacktrace`.
