@@ -13,6 +13,8 @@ object CommandRepository {
     const val ACTION_SHORTER = "com.example.chatgptwatchrelay.action.SHORTER"
     const val ACTION_OPEN = "com.example.chatgptwatchrelay.action.OPEN"
     const val ACTION_REPLY = "com.example.chatgptwatchrelay.action.REPLY"
+    const val ACTION_DISMISS = "com.example.chatgptwatchrelay.action.DISMISS"
+    const val ACTION_STOP_MONITORING = "com.example.chatgptwatchrelay.action.STOP_MONITORING"
 
     val defaultCommands = listOf(
         RelayCommand(ACTION_CONTINUE, "Continue", "Continue from where you left off."),
