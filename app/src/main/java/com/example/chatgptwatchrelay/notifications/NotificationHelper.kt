@@ -13,6 +13,7 @@ import com.example.chatgptwatchrelay.relay.RelayState
 object NotificationHelper {
     const val CHANNEL_ID = "chatgpt_relay"
     const val RESPONSE_NOTIFICATION_ID = 1001
+    const val COMMAND_STATUS_NOTIFICATION_ID = 1002
     const val KEY_REPLY_TEXT = "reply_text"
 
     fun ensureChannel(context: Context) {
@@ -31,7 +32,8 @@ object NotificationHelper {
         ensureChannel(context)
         val total = RelayState.chunks.size.coerceAtLeast(1)
         val index = RelayState.currentChunkIndex + 1
-        val text = RelayState.currentChunk().ifBlank { "No response captured yet." }
+        val baseText = RelayState.currentChunk().ifBlank { "No response captured yet." }
+        val text = if (index >= total) "$baseText\n\nEnd of response." else baseText
 
         val builder = android.app.Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -43,10 +45,27 @@ object NotificationHelper {
             .addAction(action(context, CommandRepository.ACTION_MORE, "More"))
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_SUMMARIZE, "Summarize"))
+            .addAction(action(context, CommandRepository.ACTION_SHORTER, "Shorter"))
+            .addAction(action(context, CommandRepository.ACTION_OPEN, "Open"))
             .addAction(replyAction(context))
 
         context.getSystemService(NotificationManager::class.java)
             .notify(RESPONSE_NOTIFICATION_ID, builder.build())
+    }
+
+    fun showCommandFailureNotification(context: Context, reason: String) {
+        ensureChannel(context)
+        val text = "$reason The command was copied to clipboard as a fallback."
+        val builder = android.app.Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("ChatGPT command not sent")
+            .setContentText(text.take(120))
+            .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .addAction(action(context, CommandRepository.ACTION_OPEN, "Open ChatGPT"))
+
+        context.getSystemService(NotificationManager::class.java)
+            .notify(COMMAND_STATUS_NOTIFICATION_ID, builder.build())
     }
 
     private fun action(context: Context, action: String, label: String): android.app.Notification.Action {
