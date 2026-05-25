@@ -112,7 +112,7 @@ object ChatGptCommandSender {
         return candidates.lastOrNull()
     }
 
-    private inline fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
+    private fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
         fun recurse(node: AccessibilityNodeInfo?) {
             if (node == null) return
             block(node)
