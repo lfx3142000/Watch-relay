@@ -7,14 +7,19 @@ import android.content.Context
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
+import com.example.chatgptwatchrelay.notifications.NotificationHelper
 import com.example.chatgptwatchrelay.relay.RelayState
 
 object ChatGptCommandSender {
+    private const val MAX_ATTEMPTS = 12
+    private const val TIMEOUT_MILLIS = 30_000L
+
     private data class PendingCommand(
         val text: String,
         val source: String,
         val createdAtMillis: Long = System.currentTimeMillis(),
-        var pasted: Boolean = false
+        var pasted: Boolean = false,
+        var attempts: Int = 0
     )
 
     private var pendingCommand: PendingCommand? = null
@@ -37,6 +42,14 @@ object ChatGptCommandSender {
 
     fun trySendPendingCommand(service: AccessibilityService): Boolean {
         val pending = pendingCommand ?: return false
+        pending.attempts += 1
+
+        if (pending.attempts > MAX_ATTEMPTS || System.currentTimeMillis() - pending.createdAtMillis > TIMEOUT_MILLIS) {
+            pendingCommand = null
+            NotificationHelper.showCommandFailureNotification(service, "Could not find the ChatGPT input or send button.")
+            return false
+        }
+
         val root = service.rootInActiveWindow ?: return false
 
         if (!pending.pasted) {
