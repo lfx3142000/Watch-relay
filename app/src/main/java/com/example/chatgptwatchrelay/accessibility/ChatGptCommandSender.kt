@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
 import com.example.chatgptwatchrelay.notifications.NotificationHelper
+import com.example.chatgptwatchrelay.relay.RelayDiagnostics
 import com.example.chatgptwatchrelay.relay.RelayState
 
 object ChatGptCommandSender {
@@ -30,6 +31,7 @@ object ChatGptCommandSender {
 
         copyToClipboard(context, trimmed, source)
         pendingCommand = PendingCommand(text = trimmed, source = source)
+        RelayDiagnostics.commandQueued(source)
         RelayState.monitoringEnabled = true
         ChatGptLauncher.open(context)
     }
@@ -38,6 +40,7 @@ object ChatGptCommandSender {
 
     fun clearPendingCommand() {
         pendingCommand = null
+        RelayDiagnostics.commandFailed("Cleared")
     }
 
     fun trySendPendingCommand(service: AccessibilityService): Boolean {
@@ -45,15 +48,19 @@ object ChatGptCommandSender {
         pending.attempts += 1
 
         if (pending.attempts > MAX_ATTEMPTS || System.currentTimeMillis() - pending.createdAtMillis > TIMEOUT_MILLIS) {
+            val reason = "Could not find the ChatGPT input or send button."
             pendingCommand = null
-            NotificationHelper.showCommandFailureNotification(service, "Could not find the ChatGPT input or send button.")
+            RelayDiagnostics.commandFailed(reason)
+            NotificationHelper.showCommandFailureNotification(service, reason)
             return false
         }
 
         val root = service.rootInActiveWindow ?: return false
 
         if (!pending.pasted) {
-            val inputNode = findBestInputNode(root) ?: return false
+            val inputCandidates = findInputCandidates(root)
+            RelayDiagnostics.updateCommandCandidates(inputCandidates.size, findSendCandidates(root).size)
+            val inputNode = inputCandidates.lastOrNull() ?: return false
             inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
@@ -77,10 +84,13 @@ object ChatGptCommandSender {
             }
         }
 
-        val sendNode = findSendNode(service.rootInActiveWindow ?: root) ?: return false
+        val sendCandidates = findSendCandidates(service.rootInActiveWindow ?: root)
+        RelayDiagnostics.updateCommandCandidates(RelayDiagnostics.lastInputCandidateCount, sendCandidates.size)
+        val sendNode = sendCandidates.lastOrNull() ?: return false
         val clicked = sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         if (clicked) {
             pendingCommand = null
+            RelayDiagnostics.commandSent()
             RelayState.monitoringEnabled = true
         }
         return clicked
@@ -91,7 +101,7 @@ object ChatGptCommandSender {
         clipboard.setPrimaryClip(ClipData.newPlainText("ChatGPT $source", text))
     }
 
-    private fun findBestInputNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    private fun findInputCandidates(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         root.visit { node ->
             val className = node.className?.toString().orEmpty()
@@ -108,10 +118,10 @@ object ChatGptCommandSender {
                 candidates += node
             }
         }
-        return candidates.lastOrNull()
+        return candidates
     }
 
-    private fun findSendNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    private fun findSendCandidates(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         root.visit { node ->
             if (!node.isVisibleToUser || !node.isClickable) return@visit
@@ -122,7 +132,7 @@ object ChatGptCommandSender {
                 candidates += node
             }
         }
-        return candidates.lastOrNull()
+        return candidates
     }
 
     private fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
