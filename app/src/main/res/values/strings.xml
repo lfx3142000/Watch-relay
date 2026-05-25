@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ChatGPT Watch Relay</string>
+    <string name="accessibility_service_description">Monitors ChatGPT locally so completed responses can be relayed to your watch and watch replies can be sent back to ChatGPT.</string>
+</resources>
