@@ -19,7 +19,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (!RelayState.monitoringEnabled) return
+        if (!RelayState.canNotify()) return
 
         val snapshot = ChatGptScreenReader.read(rootInActiveWindow)
         RelayDiagnostics.updateScreenSnapshot(packageName, snapshot.allVisibleText)
