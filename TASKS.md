@@ -6,7 +6,7 @@
 **Repository:** `lfx3142000/Watch-relay`  
 **Goal:** Build an Android phone app that automatically detects when ChatGPT finishes responding, sends the readable response to a Samsung Galaxy Watch, and lets the user send preset or voice/custom replies from the watch back into the same ChatGPT conversation.
 
-**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It now includes retry/timeout handling and posts a failure notification if the command cannot be sent. This still needs real-device testing and more robust ChatGPT UI detection.
+**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It includes retry/timeout handling and posts a failure notification if the command cannot be sent. The app now records and displays basic diagnostics for package, captured text, input candidates, send candidates, and command status. This still needs real-device testing and more robust ChatGPT UI detection.
 
 **Critical MVP decision:** The MVP must include an automatic relay loop. Manual share/copy is allowed only as a fallback/debug path, not as the primary MVP.
 
@@ -100,6 +100,7 @@ In progress.
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/ReplyReceiver.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/relay/Chunker.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/relay/CommandRepository.kt`
+- `app/src/main/java/com/example/chatgptwatchrelay/relay/RelayDiagnostics.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/relay/RelayState.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/launch/ChatGptLauncher.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/fallback/ShareReceiverActivity.kt`
@@ -121,6 +122,7 @@ In progress.
 - [x] Add button: `Open ChatGPT`.
 - [x] Add button: `Start Monitoring`.
 - [x] Add button: `Stop Monitoring`.
+- [x] Add diagnostics text view and refresh button.
 - [ ] Add persistent local storage for app settings. Current `RelayState` is in-memory only.
 
 ---
@@ -140,7 +142,7 @@ Started.
 - [x] Capture accessibility node tree text while ChatGPT/browser is visible.
 - [x] Add relay monitoring state: active/inactive.
 - [x] Add pending-command handling before response monitoring.
-- [ ] Add debug screen/log showing detected package, screen text count, and candidate input/send nodes.
+- [x] Add debug screen/log showing detected package, screen text count, and candidate input/send nodes.
 - [ ] Add safe throttling so the service does not over-scan. Current approach uses event-driven updates and simple stability count only.
 - [ ] Add error state if ChatGPT screen is not detectable.
 - [ ] Add privacy warning that captured screen text is processed locally.
@@ -163,7 +165,7 @@ Started, but still crude.
 - [ ] Make stability delay configurable.
 - [x] Avoid sending duplicate notifications for the same response using a response fingerprint.
 - [x] Store a fingerprint/hash of the last notified response.
-- [ ] Add debug display of current detected state.
+- [x] Add debug display of current detected state through diagnostics summary.
 
 ---
 
@@ -184,7 +186,7 @@ Not complete. Current implementation captures all visible accessible text as a p
 - [ ] Normalize whitespace.
 - [x] Store latest full response locally in memory.
 - [x] Store response fingerprint.
-- [ ] Add debug view of extracted response preview.
+- [x] Add debug view of extracted response preview via diagnostics/last chunk count.
 - [ ] Add fallback extraction strategy for Chrome web UI.
 - [x] Add fallback manual share path for failures.
 
@@ -242,7 +244,7 @@ Implemented first-pass auto-send path; needs real-device testing and better diag
 - [x] Restart response monitoring after send.
 - [x] Add retry and timeout handling for pending command sends.
 - [x] Add failure notification if command could not be sent.
-- [ ] Add diagnostics for detected input/send candidates.
+- [x] Add diagnostics for detected input/send candidates.
 - [ ] Real-device test: Continue from watch sends into ChatGPT.
 - [ ] Real-device test: Summarize from watch sends into ChatGPT.
 
@@ -275,4 +277,4 @@ Implemented first-pass auto-send path; needs real-device testing.
 
 # Current next step
 
-Run normal Android Build on `main` after retry/timeout handling. If compile passes, add diagnostics for Accessibility detection: detected package name, visible text node count, likely input candidate count, and likely send button candidate count.
+Run normal Android Build on `main` after diagnostics changes. If compile passes, proceed to real-device testing and then improve latest-response extraction so the app captures the assistant response instead of all visible ChatGPT screen text.
