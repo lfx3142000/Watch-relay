@@ -1,5 +1,6 @@
 package com.example.chatgptwatchrelay.notifications
 
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -17,6 +18,16 @@ class CommandReceiver : BroadcastReceiver() {
                 NotificationHelper.showResponseNotification(context)
             }
             CommandRepository.ACTION_OPEN -> ChatGptLauncher.open(context)
+            CommandRepository.ACTION_DISMISS -> {
+                context.getSystemService(NotificationManager::class.java)
+                    .cancel(NotificationHelper.RESPONSE_NOTIFICATION_ID)
+            }
+            CommandRepository.ACTION_STOP_MONITORING -> {
+                RelayState.stopMonitoring()
+                context.getSystemService(NotificationManager::class.java)
+                    .cancel(NotificationHelper.RESPONSE_NOTIFICATION_ID)
+                Toast.makeText(context, "Monitoring stopped", Toast.LENGTH_SHORT).show()
+            }
             else -> {
                 val prompt = CommandRepository.promptForAction(intent.action)
                 if (prompt != null) {
