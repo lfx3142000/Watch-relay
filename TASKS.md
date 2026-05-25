@@ -6,32 +6,9 @@
 **Repository:** `lfx3142000/Watch-relay`  
 **Goal:** Build an Android phone app that automatically detects when ChatGPT finishes responding, sends the readable response to a Samsung Galaxy Watch, and lets the user send preset or voice/custom replies from the watch back into the same ChatGPT conversation.
 
-**Current status:** Initial Android project shell committed. Notification relay, watch actions, inline reply receiver, manual share fallback, and a basic Accessibility monitoring stub are in place. Full ChatGPT response extraction and automatic paste/send are not complete yet.
+**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender now queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. This still needs real-device testing and more robust ChatGPT UI detection.
 
 **Critical MVP decision:** The MVP must include an automatic relay loop. Manual share/copy is allowed only as a fallback/debug path, not as the primary MVP.
-
----
-
-## Product concept
-
-ChatGPT Watch Relay is a local-first Android relay app. It does not call the OpenAI API and does not use OpenAI API tokens. Instead, it uses Android notification mirroring, notification actions, inline replies, and Accessibility automation to bridge the existing ChatGPT app or ChatGPT web session with a Galaxy Watch.
-
-Primary MVP workflow:
-
-```text
-User starts a ChatGPT response on phone
-→ Relay app monitors the active ChatGPT screen using Accessibility
-→ Relay app detects when ChatGPT stops generating
-→ Relay app extracts the latest assistant response text
-→ Relay app chunks the response into watch-readable sections
-→ Relay app posts a notification mirrored to Galaxy Watch
-→ User reads first chunk on watch
-→ User taps More / Continue / Summarize / Shorter / Open / Reply
-→ Relay app receives the watch action or dictated reply
-→ Relay app opens/returns to the same ChatGPT conversation
-→ Relay app pastes and sends the selected command or custom reply
-→ Relay app monitors for the next response
-```
 
 ---
 
@@ -76,7 +53,7 @@ Manual import/share/copy features are useful fallback features, but they do not 
 
 ## Status
 
-Mostly complete. Build verification still pending.
+Mostly complete. CI build passed after JVM target fix.
 
 ## Tasks
 
@@ -89,6 +66,7 @@ Mostly complete. Build verification still pending.
 - [x] Commit initial project shell.
 - [ ] Confirm project opens in Android Studio.
 - [ ] Confirm app builds locally.
+- [x] Confirm app builds in GitHub Actions CI. Run `26391318581` passed.
 - [ ] Add Gradle wrapper files or document Android Studio/Gradle setup.
 
 ## Acceptance criteria
@@ -96,7 +74,7 @@ Mostly complete. Build verification still pending.
 - [x] Repository exists.
 - [x] `TASKS.md` is committed.
 - [x] Android app skeleton files exist.
-- [ ] Android app skeleton builds.
+- [x] Android app skeleton builds in CI.
 
 ---
 
@@ -116,6 +94,7 @@ In progress.
 - `app/src/main/res/values/strings.xml`
 - `app/src/main/java/com/example/chatgptwatchrelay/MainActivity.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/accessibility/ChatGptAccessibilityService.kt`
+- `app/src/main/java/com/example/chatgptwatchrelay/accessibility/ChatGptCommandSender.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/NotificationHelper.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/CommandReceiver.kt`
 - `app/src/main/java/com/example/chatgptwatchrelay/notifications/ReplyReceiver.kt`
@@ -144,16 +123,6 @@ In progress.
 - [x] Add button: `Stop Monitoring`.
 - [ ] Add persistent local storage for app settings. Current `RelayState` is in-memory only.
 
-## Acceptance criteria
-
-- [ ] App installs on Android phone.
-- [ ] App opens without crashing.
-- [ ] User can enable notification permission.
-- [ ] User can enable Accessibility Service.
-- [ ] Test notification appears on phone.
-- [ ] Test notification mirrors to Galaxy Watch when watch notifications are enabled.
-- [x] App can open ChatGPT app or ChatGPT web fallback.
-
 ---
 
 # Phase 2 — Accessibility monitoring foundation
@@ -169,19 +138,12 @@ Started.
 - [x] Identify when ChatGPT app is active using package name contains `openai`.
 - [x] Identify when Chrome/browser target is active using package name contains `chrome` as a basic fallback.
 - [x] Capture accessibility node tree text while ChatGPT/browser is visible.
-- [ ] Add debug screen/log showing detected package, screen text count, and candidate input/send nodes.
 - [x] Add relay monitoring state: active/inactive.
+- [x] Add pending-command handling before response monitoring.
+- [ ] Add debug screen/log showing detected package, screen text count, and candidate input/send nodes.
 - [ ] Add safe throttling so the service does not over-scan. Current approach uses event-driven updates and simple stability count only.
 - [ ] Add error state if ChatGPT screen is not detectable.
 - [ ] Add privacy warning that captured screen text is processed locally.
-
-## Acceptance criteria
-
-- [ ] App can detect when ChatGPT is the active screen.
-- [ ] App can read accessible text nodes from ChatGPT screen.
-- [ ] Debug screen shows whether ChatGPT UI is recognized.
-- [x] Monitoring can be started and stopped by the user.
-- [x] No network access is required.
 
 ---
 
@@ -202,13 +164,6 @@ Started, but still crude.
 - [x] Avoid sending duplicate notifications for the same response using a response fingerprint.
 - [x] Store a fingerprint/hash of the last notified response.
 - [ ] Add debug display of current detected state.
-
-## Acceptance criteria
-
-- [ ] When ChatGPT starts generating, app enters `GENERATING`.
-- [ ] When response stops changing, app enters `COMPLETE_CONFIRMED`.
-- [x] App attempts to avoid repeated notifications for the same response.
-- [ ] App can recover if detection fails or screen changes.
 
 ---
 
@@ -232,13 +187,6 @@ Not complete. Current implementation captures all visible accessible text as a p
 - [ ] Add debug view of extracted response preview.
 - [ ] Add fallback extraction strategy for Chrome web UI.
 - [x] Add fallback manual share path for failures.
-
-## Acceptance criteria
-
-- [ ] After ChatGPT completes, the app extracts the latest response automatically.
-- [ ] Extracted text is readable and does not mainly contain navigation/UI clutter.
-- [x] Latest captured text is saved locally in memory.
-- [ ] App can show extracted response preview on main screen.
 
 ---
 
@@ -269,23 +217,13 @@ Started.
 - [ ] Add final chunk state: `End of response`.
 - [x] Add fallback for short responses.
 
-## Acceptance criteria
-
-- [x] Notification can be posted automatically after stable text is detected.
-- [x] Notification appears on phone when permission is granted.
-- [ ] Notification mirrors to Galaxy Watch. Needs device test.
-- [x] Watch should be able to show first chunk via normal notification mirroring.
-- [x] `More` advances to the next chunk.
-- [ ] Final chunk clearly indicates end of response.
-- [x] Duplicate notifications are partially avoided.
-
 ---
 
 # Phase 6 — Preset command actions from watch
 
 ## Status
 
-Started, fallback mode only.
+Implemented first-pass auto-send path; needs real-device testing and better diagnostics.
 
 ## Tasks
 
@@ -296,19 +234,16 @@ Started, fallback mode only.
 - [x] Map action taps to command text.
 - [x] Copy command text to clipboard as fallback.
 - [x] Open or return to ChatGPT.
-- [ ] Use Accessibility to focus the ChatGPT message input.
-- [ ] Paste command into the message input.
-- [ ] Tap send.
-- [ ] Restart response monitoring after send.
+- [x] Create `ChatGptCommandSender.kt`.
+- [x] Queue preset command for Accessibility send.
+- [x] Use Accessibility to find and focus a likely ChatGPT message input.
+- [x] Paste command into the message input or use `ACTION_SET_TEXT` fallback.
+- [x] Find and tap a likely Send control.
+- [x] Restart response monitoring after send.
 - [ ] Add failure notification if command could not be sent.
-
-## Acceptance criteria
-
-- [ ] User can tap `Continue` on watch and app sends the command to ChatGPT automatically.
-- [ ] User can tap `Summarize` on watch and app sends the command to ChatGPT automatically.
-- [ ] User can tap `Shorter` on watch and app sends the command to ChatGPT automatically.
-- [ ] App returns to monitoring for the next ChatGPT response.
-- [x] If auto-send fails/not implemented, command remains copied to clipboard and ChatGPT opens.
+- [ ] Add diagnostics for detected input/send candidates.
+- [ ] Real-device test: Continue from watch sends into ChatGPT.
+- [ ] Real-device test: Summarize from watch sends into ChatGPT.
 
 ---
 
@@ -316,32 +251,26 @@ Started, fallback mode only.
 
 ## Status
 
-Started, fallback mode only.
+Implemented first-pass auto-send path; needs real-device testing.
 
 ## Tasks
 
 - [x] Create `ReplyReceiver.kt`.
 - [x] Add notification inline reply action.
 - [x] Capture RemoteInput reply text.
-- [ ] Store last custom reply.
+- [x] Queue custom reply for Accessibility send.
 - [x] Copy reply to clipboard as fallback.
 - [x] Open or return to ChatGPT.
-- [ ] Use Accessibility to focus message input.
-- [ ] Paste reply text.
-- [ ] Tap send.
-- [ ] Restart monitoring after send.
+- [x] Use Accessibility to find and focus message input.
+- [x] Paste reply text or use `ACTION_SET_TEXT` fallback.
+- [x] Tap likely Send control.
+- [x] Restart monitoring after send.
 - [x] Add basic user-visible error if inline reply is unavailable.
-
-## Acceptance criteria
-
-- [ ] Watch shows a reply option when supported. Needs device test.
-- [ ] User can dictate or type a custom reply. Needs device test.
-- [x] App can receive the reply text through `RemoteInput` when delivered.
-- [ ] App sends the reply into ChatGPT automatically.
-- [x] App falls back to clipboard/open mode if auto-send is not implemented.
+- [ ] Real-device test: watch shows a reply option.
+- [ ] Real-device test: dictated reply is received and sent into ChatGPT.
 
 ---
 
 # Current next step
 
-Build and test the project in Android Studio. Fix any compile issues, then implement `ChatGptCommandSender.kt` so preset and custom watch replies are pasted and sent into ChatGPT automatically through Accessibility.
+Run CI after `ChatGptCommandSender.kt` changes. If compile passes, add an APK artifact upload to the workflow, then begin real-device testing of: notification permission, Accessibility permission, test watch notification, automatic stable-text notification, More, Continue, Summarize, and inline Reply.
