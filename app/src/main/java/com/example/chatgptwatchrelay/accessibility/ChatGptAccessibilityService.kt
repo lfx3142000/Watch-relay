@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.notifications.NotificationHelper
+import com.example.chatgptwatchrelay.relay.RelayDiagnostics
 import com.example.chatgptwatchrelay.relay.RelayState
 
 class ChatGptAccessibilityService : AccessibilityService() {
@@ -22,6 +23,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
         if (!RelayState.monitoringEnabled) return
 
         val visibleText = rootInActiveWindow?.collectText().orEmpty().trim()
+        RelayDiagnostics.updateScreenSnapshot(packageName, visibleText)
         if (visibleText.length < 20) return
 
         if (visibleText == lastObservedText) {
