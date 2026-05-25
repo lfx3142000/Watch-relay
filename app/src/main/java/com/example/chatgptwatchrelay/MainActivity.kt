@@ -45,17 +45,17 @@ class MainActivity : Activity() {
         container.addView(button("Enable Accessibility") { openAccessibilitySettings() })
         container.addView(button("Open ChatGPT") { ChatGptLauncher.open(this) })
         container.addView(button("Start Monitoring") {
-            RelayState.monitoringEnabled = true
-            Toast.makeText(this, "Monitoring enabled", Toast.LENGTH_SHORT).show()
+            RelayState.startMonitoring()
+            Toast.makeText(this, "Monitoring enabled. Will notify once.", Toast.LENGTH_SHORT).show()
             refreshDiagnostics()
         })
         container.addView(button("Stop Monitoring") {
-            RelayState.monitoringEnabled = false
+            RelayState.stopMonitoring()
             Toast.makeText(this, "Monitoring stopped", Toast.LENGTH_SHORT).show()
             refreshDiagnostics()
         })
         container.addView(button("Send Test Watch Notification") {
-            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Open, or Reply from the notification actions.")
+            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Stop, Dismiss, or Reply from the notification actions.")
             NotificationHelper.showResponseNotification(this)
             refreshDiagnostics()
         })
@@ -85,6 +85,8 @@ class MainActivity : Activity() {
     private fun diagnosticsSummary(): String = buildString {
         appendLine("Status:")
         appendLine("Monitoring: ${if (RelayState.monitoringEnabled) "Active" else "Stopped"}")
+        appendLine("Notify once: ${if (RelayState.notifyOnceEnabled) "On" else "Off"}")
+        appendLine("Notified this session: ${if (RelayState.hasNotifiedThisSession) "Yes" else "No"}")
         appendLine("Captured chunks: ${RelayState.chunks.size}")
         appendLine()
         appendLine("Diagnostics:")
