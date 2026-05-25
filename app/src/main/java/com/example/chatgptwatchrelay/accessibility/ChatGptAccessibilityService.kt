@@ -11,9 +11,15 @@ class ChatGptAccessibilityService : AccessibilityService() {
     private var stableCount = 0
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (!RelayState.monitoringEnabled) return
         val packageName = event?.packageName?.toString().orEmpty()
         if (!isChatGptTarget(packageName)) return
+
+        if (ChatGptCommandSender.hasPendingCommand()) {
+            ChatGptCommandSender.trySendPendingCommand(this)
+            return
+        }
+
+        if (!RelayState.monitoringEnabled) return
 
         val visibleText = rootInActiveWindow?.collectText().orEmpty().trim()
         if (visibleText.length < 20) return
