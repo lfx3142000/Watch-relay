@@ -6,13 +6,27 @@ object RelayState {
     var currentChunkIndex: Int = 0
     var lastFingerprint: Int = 0
     var monitoringEnabled: Boolean = false
+    var notifyOnceEnabled: Boolean = true
+    var hasNotifiedThisSession: Boolean = false
 
     fun setResponse(text: String) {
         lastFullResponse = text.trim()
         chunks = Chunker.split(lastFullResponse)
         currentChunkIndex = 0
         lastFingerprint = lastFullResponse.hashCode()
+        hasNotifiedThisSession = true
     }
+
+    fun startMonitoring() {
+        monitoringEnabled = true
+        hasNotifiedThisSession = false
+    }
+
+    fun stopMonitoring() {
+        monitoringEnabled = false
+    }
+
+    fun canNotify(): Boolean = monitoringEnabled && (!notifyOnceEnabled || !hasNotifiedThisSession)
 
     fun currentChunk(): String = chunks.getOrNull(currentChunkIndex).orEmpty()
 
