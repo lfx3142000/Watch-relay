@@ -5,7 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import com.example.chatgptwatchrelay.launch.ChatGptLauncher
+import com.example.chatgptwatchrelay.accessibility.ChatGptCommandSender
 
 class ReplyReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -19,9 +19,7 @@ class ReplyReceiver : BroadcastReceiver() {
             return
         }
 
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ChatGPT reply", reply))
-        Toast.makeText(context, "Reply copied for ChatGPT", Toast.LENGTH_SHORT).show()
-        ChatGptLauncher.open(context)
+        ChatGptCommandSender.queueCommand(context, reply, "reply")
+        Toast.makeText(context, "Sending reply to ChatGPT", Toast.LENGTH_SHORT).show()
     }
 }
