@@ -28,7 +28,19 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Decode stable CI signing key
+        run: |
+          mkdir -p app/ci
+          base64 -d app/ci/relay-update.keystore.b64 > app/ci/relay-update.keystore
+
       - name: Build debug APK
+        env:
+          RELAY_DEBUG_KEYSTORE_PATH: app/ci/relay-update.keystore
+          RELAY_DEBUG_KEYSTORE_PASSWORD: relayupdate
+          RELAY_DEBUG_KEY_ALIAS: relayupdate
+          RELAY_DEBUG_KEY_PASSWORD: relayupdate
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload debug APK
