@@ -1,0 +1,1 @@
+Trigger APK build after input/send sequencing update.
