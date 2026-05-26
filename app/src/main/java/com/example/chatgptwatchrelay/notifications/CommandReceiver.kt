@@ -23,10 +23,10 @@ class CommandReceiver : BroadcastReceiver() {
                     .cancel(NotificationHelper.RESPONSE_NOTIFICATION_ID)
             }
             CommandRepository.ACTION_STOP_MONITORING -> {
-                RelayState.stopMonitoring()
+                RelayState.stopNotifications()
                 context.getSystemService(NotificationManager::class.java)
                     .cancel(NotificationHelper.RESPONSE_NOTIFICATION_ID)
-                Toast.makeText(context, "Monitoring stopped", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Relay notifications stopped", Toast.LENGTH_SHORT).show()
             }
             else -> {
                 val prompt = CommandRepository.promptForAction(intent.action)
