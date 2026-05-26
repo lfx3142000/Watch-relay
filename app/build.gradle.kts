@@ -22,7 +22,7 @@ android {
     signingConfigs {
         if (!relayDebugKeystorePath.isNullOrBlank()) {
             create("relayCiDebug") {
-                storeFile = file(relayDebugKeystorePath)
+                storeFile = rootProject.file(relayDebugKeystorePath)
                 storePassword = System.getenv("RELAY_DEBUG_KEYSTORE_PASSWORD") ?: "relayupdate"
                 keyAlias = System.getenv("RELAY_DEBUG_KEY_ALIAS") ?: "relayupdate"
                 keyPassword = System.getenv("RELAY_DEBUG_KEY_PASSWORD") ?: "relayupdate"
