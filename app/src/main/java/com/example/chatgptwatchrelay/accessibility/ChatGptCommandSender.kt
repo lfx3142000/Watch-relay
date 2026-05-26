@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
@@ -84,7 +85,8 @@ object ChatGptCommandSender {
             }
         }
 
-        val sendCandidates = findSendCandidates(service.rootInActiveWindow ?: root)
+        val currentRoot = service.rootInActiveWindow ?: root
+        val sendCandidates = findSendCandidates(currentRoot)
         RelayDiagnostics.updateCommandCandidates(RelayDiagnostics.lastInputCandidateCount, sendCandidates.size)
         val sendNode = sendCandidates.lastOrNull() ?: return false
         val clicked = sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -122,17 +124,37 @@ object ChatGptCommandSender {
     }
 
     private fun findSendCandidates(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
-        val candidates = mutableListOf<AccessibilityNodeInfo>()
+        val explicitCandidates = mutableListOf<AccessibilityNodeInfo>()
+        val fallbackCandidates = mutableListOf<AccessibilityNodeInfo>()
+        val rootBounds = Rect().also { root.getBoundsInScreen(it) }
+        val rootHeight = rootBounds.height().coerceAtLeast(1)
+        val rootWidth = rootBounds.width().coerceAtLeast(1)
+
         root.visit { node ->
             if (!node.isVisibleToUser || !node.isClickable) return@visit
             val text = node.text?.toString().orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
+            val className = node.className?.toString().orEmpty()
             val label = "$text $desc"
+
             if (label.contains("send", ignoreCase = true) || label.contains("submit", ignoreCase = true)) {
-                candidates += node
+                explicitCandidates += node
+                return@visit
+            }
+
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            val isBottomArea = bounds.top > rootBounds.top + (rootHeight * 0.55)
+            val isRightArea = bounds.left > rootBounds.left + (rootWidth * 0.55)
+            val isButtonish = className.contains("Button", ignoreCase = true) ||
+                className.contains("Image", ignoreCase = true) ||
+                desc.isNotBlank()
+            val reasonableSize = bounds.width() in 24..260 && bounds.height() in 24..260
+
+            if (isBottomArea && isRightArea && isButtonish && reasonableSize) {
+                fallbackCandidates += node
             }
         }
-        return candidates
+        return if (explicitCandidates.isNotEmpty()) explicitCandidates else fallbackCandidates
     }
 
     private fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
