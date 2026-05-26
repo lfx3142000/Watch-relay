@@ -9,12 +9,12 @@ object RelayState {
     var notifyOnceEnabled: Boolean = true
     var hasNotifiedThisSession: Boolean = false
 
-    fun setResponse(text: String) {
+    fun setResponse(text: String, markNotified: Boolean = true) {
         lastFullResponse = text.trim()
         chunks = Chunker.split(lastFullResponse)
         currentChunkIndex = 0
         lastFingerprint = lastFullResponse.hashCode()
-        hasNotifiedThisSession = true
+        if (markNotified) hasNotifiedThisSession = true
     }
 
     fun startMonitoring() {
