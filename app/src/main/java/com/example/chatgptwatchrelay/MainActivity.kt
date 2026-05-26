@@ -36,7 +36,7 @@ class MainActivity : Activity() {
         })
 
         container.addView(TextView(this).apply {
-            text = "Automatic MVP target: detect ChatGPT completion, notify watch, and relay watch replies back to ChatGPT."
+            text = "Automatic MVP target: detect each completed ChatGPT response, notify watch, and relay watch replies back to ChatGPT."
             textSize = 16f
             setPadding(0, 20, 0, 20)
         })
@@ -46,16 +46,16 @@ class MainActivity : Activity() {
         container.addView(button("Open ChatGPT") { ChatGptLauncher.open(this) })
         container.addView(button("Start Monitoring") {
             RelayState.startMonitoring()
-            Toast.makeText(this, "Monitoring enabled. Will notify once.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Monitoring enabled. Will notify once per new response.", Toast.LENGTH_SHORT).show()
             refreshDiagnostics()
         })
         container.addView(button("Stop Monitoring") {
-            RelayState.stopMonitoring()
-            Toast.makeText(this, "Monitoring stopped", Toast.LENGTH_SHORT).show()
+            RelayState.stopNotifications()
+            Toast.makeText(this, "Relay notifications stopped", Toast.LENGTH_SHORT).show()
             refreshDiagnostics()
         })
         container.addView(button("Send Test Watch Notification") {
-            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Stop, Dismiss, or Reply from the notification actions.", markNotified = false)
+            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use Continue, Status, Done?, Shorter, Stop alerts, More, or Reply from the notification actions.", markNotified = false)
             NotificationHelper.showResponseNotification(this)
             refreshDiagnostics()
         })
@@ -85,8 +85,8 @@ class MainActivity : Activity() {
     private fun diagnosticsSummary(): String = buildString {
         appendLine("Status:")
         appendLine("Monitoring: ${if (RelayState.monitoringEnabled) "Active" else "Stopped"}")
-        appendLine("Notify once: ${if (RelayState.notifyOnceEnabled) "On" else "Off"}")
-        appendLine("Notified this session: ${if (RelayState.hasNotifiedThisSession) "Yes" else "No"}")
+        appendLine("Notify once per response: ${if (RelayState.notifyOnceEnabled) "On" else "Off"}")
+        appendLine("Last response notified: ${if (RelayState.lastNotifiedFingerprint != 0) "Yes" else "No"}")
         appendLine("Captured chunks: ${RelayState.chunks.size}")
         appendLine()
         appendLine("Diagnostics:")
