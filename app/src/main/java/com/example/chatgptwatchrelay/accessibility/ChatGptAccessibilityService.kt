@@ -19,7 +19,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (!RelayState.canNotify()) return
+        if (!RelayState.monitoringEnabled) return
 
         val snapshot = ChatGptScreenReader.read(rootInActiveWindow)
         RelayDiagnostics.updateScreenSnapshot(packageName, snapshot.allVisibleText)
@@ -34,7 +34,8 @@ class ChatGptAccessibilityService : AccessibilityService() {
             lastObservedResponse = responseText
         }
 
-        if (stableCount >= 4 && responseText.hashCode() != RelayState.lastFingerprint) {
+        val fingerprint = responseText.hashCode()
+        if (stableCount >= 4 && RelayState.canNotifyResponse(fingerprint)) {
             RelayState.setResponse(responseText)
             NotificationHelper.showResponseNotification(this)
         }
