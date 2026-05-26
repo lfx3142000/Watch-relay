@@ -7,6 +7,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
@@ -15,14 +16,15 @@ import com.example.chatgptwatchrelay.relay.RelayDiagnostics
 import com.example.chatgptwatchrelay.relay.RelayState
 
 object ChatGptCommandSender {
-    private const val MAX_ATTEMPTS = 12
-    private const val TIMEOUT_MILLIS = 30_000L
+    private const val MAX_ATTEMPTS = 16
+    private const val TIMEOUT_MILLIS = 40_000L
 
     private data class PendingCommand(
         val text: String,
         val source: String,
         val createdAtMillis: Long = System.currentTimeMillis(),
-        var pasted: Boolean = false,
+        var placedInInput: Boolean = false,
+        var sendAttemptedAfterPlacement: Boolean = false,
         var attempts: Int = 0,
         var lastInputBounds: Rect? = null
     )
@@ -52,7 +54,7 @@ object ChatGptCommandSender {
         pending.attempts += 1
 
         if (pending.attempts > MAX_ATTEMPTS || System.currentTimeMillis() - pending.createdAtMillis > TIMEOUT_MILLIS) {
-            val reason = "Could not find the ChatGPT input or send button."
+            val reason = "Could not place the command in ChatGPT or press Send."
             pendingCommand = null
             RelayDiagnostics.commandFailed(reason)
             NotificationHelper.showCommandFailureNotification(service, reason)
@@ -60,39 +62,44 @@ object ChatGptCommandSender {
         }
 
         val root = service.rootInActiveWindow ?: return false
+        val inputCandidates = findInputCandidates(root)
+        RelayDiagnostics.updateCommandCandidates(inputCandidates.size, findSendCandidates(root).size)
+        val inputNode = inputCandidates.lastOrNull()
 
-        if (!pending.pasted) {
-            val inputCandidates = findInputCandidates(root)
-            RelayDiagnostics.updateCommandCandidates(inputCandidates.size, findSendCandidates(root).size)
-            val inputNode = inputCandidates.lastOrNull() ?: return false
+        if (!pending.placedInInput) {
+            if (inputNode == null) return false
             inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             pending.lastInputBounds = Rect().also { inputNode.getBoundsInScreen(it) }
 
-            val pasted = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-            val setText = if (!pasted) {
-                val args = Bundle().apply {
-                    putCharSequence(
-                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                        pending.text
-                    )
-                }
-                inputNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-            } else {
-                false
-            }
+            val setTextFirst = setInputText(inputNode, pending.text)
+            val pasteSecond = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            val imeEnter = performImeEnter(inputNode)
 
-            if (pasted || setText) {
-                pending.pasted = true
-            } else {
+            if (setTextFirst || pasteSecond || imeEnter) {
+                pending.placedInInput = true
+                RelayDiagnostics.commandQueued("${pending.source} command placed; waiting for Send")
+                return false
+            }
+            return false
+        }
+
+        if (!pending.sendAttemptedAfterPlacement && inputNode != null) {
+            val currentText = inputNode.text?.toString().orEmpty()
+            if (currentText.isBlank()) {
+                inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                setInputText(inputNode, pending.text)
+                performImeEnter(inputNode)
                 return false
             }
         }
 
         val currentRoot = service.rootInActiveWindow ?: root
         val sendCandidates = findSendCandidates(currentRoot)
-        RelayDiagnostics.updateCommandCandidates(RelayDiagnostics.lastInputCandidateCount, sendCandidates.size)
+        RelayDiagnostics.updateCommandCandidates(inputCandidates.size, sendCandidates.size)
         val sendNode = sendCandidates.lastOrNull()
+        pending.sendAttemptedAfterPlacement = true
         val sent = if (sendNode != null) {
             sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         } else {
@@ -105,6 +112,24 @@ object ChatGptCommandSender {
             RelayState.monitoringEnabled = true
         }
         return sent
+    }
+
+    private fun setInputText(inputNode: AccessibilityNodeInfo, text: String): Boolean {
+        val args = Bundle().apply {
+            putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                text
+            )
+        }
+        return inputNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    private fun performImeEnter(inputNode: AccessibilityNodeInfo): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            inputNode.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        } else {
+            false
+        }
     }
 
     private fun tapLikelySendButton(
