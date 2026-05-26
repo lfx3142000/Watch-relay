@@ -1,9 +1,11 @@
 package com.example.chatgptwatchrelay.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
@@ -21,7 +23,8 @@ object ChatGptCommandSender {
         val source: String,
         val createdAtMillis: Long = System.currentTimeMillis(),
         var pasted: Boolean = false,
-        var attempts: Int = 0
+        var attempts: Int = 0,
+        var lastInputBounds: Rect? = null
     )
 
     private var pendingCommand: PendingCommand? = null
@@ -64,6 +67,7 @@ object ChatGptCommandSender {
             val inputNode = inputCandidates.lastOrNull() ?: return false
             inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            pending.lastInputBounds = Rect().also { inputNode.getBoundsInScreen(it) }
 
             val pasted = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
             val setText = if (!pasted) {
@@ -88,14 +92,37 @@ object ChatGptCommandSender {
         val currentRoot = service.rootInActiveWindow ?: root
         val sendCandidates = findSendCandidates(currentRoot)
         RelayDiagnostics.updateCommandCandidates(RelayDiagnostics.lastInputCandidateCount, sendCandidates.size)
-        val sendNode = sendCandidates.lastOrNull() ?: return false
-        val clicked = sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        if (clicked) {
+        val sendNode = sendCandidates.lastOrNull()
+        val sent = if (sendNode != null) {
+            sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } else {
+            tapLikelySendButton(service, currentRoot, pending.lastInputBounds)
+        }
+
+        if (sent) {
             pendingCommand = null
             RelayDiagnostics.commandSent()
             RelayState.monitoringEnabled = true
         }
-        return clicked
+        return sent
+    }
+
+    private fun tapLikelySendButton(
+        service: AccessibilityService,
+        root: AccessibilityNodeInfo,
+        inputBounds: Rect?
+    ): Boolean {
+        val rootBounds = Rect().also { root.getBoundsInScreen(it) }
+        val y = when {
+            inputBounds != null && !inputBounds.isEmpty -> inputBounds.centerY().toFloat()
+            else -> rootBounds.bottom - 72f
+        }
+        val x = rootBounds.right - 56f
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        return service.dispatchGesture(gesture, null, null)
     }
 
     private fun copyToClipboard(context: Context, text: String, source: String) {
