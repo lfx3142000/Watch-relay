@@ -45,10 +45,10 @@ object NotificationHelper {
             .setDeleteIntent(pendingIntent(context, CommandRepository.ACTION_DISMISS))
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_STATUS, "Status"))
-            .addAction(action(context, CommandRepository.ACTION_FINISHED, "Done?"))
             .addAction(action(context, CommandRepository.ACTION_SHORTER, "Shorter"))
-            .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop alerts"))
-            .addAction(action(context, CommandRepository.ACTION_MORE, "More"))
+            .addAction(action(context, CommandRepository.ACTION_CHECK_RUN, "Check run"))
+            .addAction(action(context, CommandRepository.ACTION_SEND_LINK, "Send link"))
+            .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop"))
             .addAction(replyAction(context))
 
         context.getSystemService(NotificationManager::class.java)
