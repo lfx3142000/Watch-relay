@@ -55,7 +55,7 @@ class MainActivity : Activity() {
             refreshDiagnostics()
         })
         container.addView(button("Send Test Watch Notification") {
-            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Stop, Dismiss, or Reply from the notification actions.")
+            RelayState.setResponse("This is a test ChatGPT response relayed to your watch. Use More, Continue, Summarize, Shorter, Stop, Dismiss, or Reply from the notification actions.", markNotified = false)
             NotificationHelper.showResponseNotification(this)
             refreshDiagnostics()
         })
