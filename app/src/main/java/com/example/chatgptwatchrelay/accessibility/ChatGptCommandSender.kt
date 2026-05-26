@@ -95,9 +95,6 @@ object ChatGptCommandSender {
             pending.pasteAttempted = pending.pasteAttempted || pasted
 
             if (!pasted && pending.attempts >= 8) {
-                // Last-resort fallback only. ACTION_SET_TEXT can update the Accessibility
-                // node without committing to ChatGPT's real Compose text state, so do not
-                // trust it as proof that the message box is populated.
                 setInputText(inputNode, pending.text)
             }
 
@@ -107,9 +104,15 @@ object ChatGptCommandSender {
         }
 
         val currentRoot = service.rootInActiveWindow ?: root
+        val freshInputNode = chooseInputCandidate(findInputCandidates(currentRoot))
+        val freshInputBounds = freshInputNode?.let { Rect().also { bounds -> it.getBoundsInScreen(bounds) } }
+        if (freshInputBounds != null && !freshInputBounds.isEmpty) {
+            pending.lastInputBounds = freshInputBounds
+        }
+
         val sendCandidates = findSendCandidates(currentRoot)
         RelayDiagnostics.updateCommandCandidates(inputCandidates.size, sendCandidates.size)
-        val sendNode = sendCandidates.lastOrNull()
+        val sendNode = chooseSendCandidate(sendCandidates, pending.lastInputBounds)
         pending.sendAttemptedAfterVerification = true
         val sent = if (sendNode != null) {
             sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -127,6 +130,20 @@ object ChatGptCommandSender {
 
     private fun chooseInputCandidate(candidates: List<AccessibilityNodeInfo>): AccessibilityNodeInfo? {
         return candidates.lastOrNull { it.isEditable } ?: candidates.lastOrNull()
+    }
+
+    private fun chooseSendCandidate(
+        candidates: List<AccessibilityNodeInfo>,
+        inputBounds: Rect?
+    ): AccessibilityNodeInfo? {
+        if (candidates.isEmpty()) return null
+        if (inputBounds == null || inputBounds.isEmpty) return candidates.lastOrNull()
+        return candidates.maxByOrNull { node ->
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            val sameRowScore = 10_000 - kotlin.math.abs(bounds.centerY() - inputBounds.centerY())
+            val rightScore = bounds.right
+            sameRowScore + rightScore
+        }
     }
 
     private fun inputLooksPopulated(inputNode: AccessibilityNodeInfo, commandText: String): Boolean {
@@ -166,11 +183,12 @@ object ChatGptCommandSender {
         inputBounds: Rect?
     ): Boolean {
         val rootBounds = Rect().also { root.getBoundsInScreen(it) }
-        val y = when {
-            inputBounds != null && !inputBounds.isEmpty -> inputBounds.centerY().toFloat()
-            else -> rootBounds.bottom - 72f
+        val input = inputBounds?.takeUnless { it.isEmpty }
+        val y = input?.centerY()?.toFloat() ?: (rootBounds.bottom - 72f)
+        val x = when {
+            input != null -> (input.right + 56).coerceAtMost(rootBounds.right - 36).toFloat()
+            else -> rootBounds.right - 56f
         }
-        val x = rootBounds.right - 56f
         return tap(service, x, y, 80)
     }
 
