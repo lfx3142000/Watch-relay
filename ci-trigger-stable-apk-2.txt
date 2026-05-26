@@ -1,0 +1,1 @@
+Trigger stable signed APK build after keystore path fix.
