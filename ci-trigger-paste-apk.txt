@@ -1,0 +1,1 @@
+Trigger stable APK build after paste-first command sender update.
