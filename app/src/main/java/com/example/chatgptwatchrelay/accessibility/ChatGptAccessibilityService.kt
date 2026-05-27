@@ -12,6 +12,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
     private var baselineResponse = ""
     private var bestCandidateResponse = ""
     private var stableEndControlCount = 0
+    private var captureStartedAtMillis = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString().orEmpty()
@@ -24,7 +25,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
 
         if (!RelayState.monitoringEnabled) return
 
-        val snapshot = ChatGptScreenReader.read(rootInActiveWindow)
+        val snapshot = ChatGptScreenReader.read(rootInActiveWindow, RelayState.lastSentCommandText)
         RelayDiagnostics.updateScreenSnapshot(packageName, snapshot.allVisibleText)
         val responseText = snapshot.likelyLatestResponse.trim()
         RelayDiagnostics.updateLikelyResponse(responseText, snapshot.responseLineCount)
@@ -34,11 +35,22 @@ class ChatGptAccessibilityService : AccessibilityService() {
             baselineResponse = responseText
             bestCandidateResponse = ""
             stableEndControlCount = 0
+            captureStartedAtMillis = System.currentTimeMillis()
             RelayDiagnostics.commandQueued("Response capture armed")
             return
         }
 
+        if (RelayState.lastSentCommandText.isNotBlank() && snapshot.sentCommandBottomY <= 0) {
+            RelayDiagnostics.commandQueued("Waiting to locate sent message on screen")
+            return
+        }
+
+        if (System.currentTimeMillis() - captureStartedAtMillis < POST_SEND_GRACE_MILLIS) {
+            return
+        }
+
         if (responseText.length < MIN_RESPONSE_CHARS) return
+        if (looksLikeSentCommand(responseText)) return
 
         when (RelayState.captureState) {
             ResponseCaptureState.IDLE,
@@ -49,7 +61,7 @@ class ChatGptAccessibilityService : AccessibilityService() {
                     bestCandidateResponse = responseText
                     stableEndControlCount = 0
                     RelayState.markCapturing()
-                    RelayDiagnostics.commandQueued("Capturing new response")
+                    RelayDiagnostics.commandQueued("Capturing new response below sent message")
                 }
             }
 
@@ -78,6 +90,13 @@ class ChatGptAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    private fun looksLikeSentCommand(text: String): Boolean {
+        val sent = RelayState.lastSentCommandText.normalizeForCompare()
+        if (sent.isBlank()) return false
+        val current = text.normalizeForCompare()
+        return current == sent || current.startsWith(sent.take(80))
+    }
+
     private fun isMeaningfullyDifferent(current: String, baseline: String): Boolean {
         if (baseline.isBlank()) return current.length >= MIN_RESPONSE_CHARS
         val currentNormalized = current.normalizeForCompare()
@@ -99,5 +118,6 @@ class ChatGptAccessibilityService : AccessibilityService() {
     companion object {
         private const val MIN_RESPONSE_CHARS = 40
         private const val END_CONTROL_STABLE_EVENTS = 2
+        private const val POST_SEND_GRACE_MILLIS = 1_800L
     }
 }
