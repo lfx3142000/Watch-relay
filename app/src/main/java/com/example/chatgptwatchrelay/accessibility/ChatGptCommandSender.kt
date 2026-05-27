@@ -111,9 +111,10 @@ object ChatGptCommandSender {
         val sent = sendNode?.let { clickNodeOrClickableParent(it) } == true
 
         if (sent) {
+            val sentText = pending.text
             pendingCommand = null
             RelayDiagnostics.commandSent()
-            RelayState.startCaptureAfterSend()
+            RelayState.startCaptureAfterSend(sentText)
         } else {
             RelayDiagnostics.commandQueued("${pending.source} Send button found but click failed")
         }
