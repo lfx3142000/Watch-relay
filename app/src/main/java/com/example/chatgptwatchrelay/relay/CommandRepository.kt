@@ -15,6 +15,7 @@ object CommandRepository {
     const val ACTION_SHORTER = "com.example.chatgptwatchrelay.action.SHORTER"
     const val ACTION_CHECK_RUN = "com.example.chatgptwatchrelay.action.CHECK_RUN"
     const val ACTION_SEND_LINK = "com.example.chatgptwatchrelay.action.SEND_LINK"
+    const val ACTION_TEST_MESSAGE = "com.example.chatgptwatchrelay.action.TEST_MESSAGE"
     const val ACTION_OPEN = "com.example.chatgptwatchrelay.action.OPEN"
     const val ACTION_REPLY = "com.example.chatgptwatchrelay.action.REPLY"
     const val ACTION_DISMISS = "com.example.chatgptwatchrelay.action.DISMISS"
@@ -23,6 +24,7 @@ object CommandRepository {
     val defaultCommands = listOf(
         RelayCommand(ACTION_CONTINUE, "Continue", "Continue"),
         RelayCommand(ACTION_STATUS, "Status", "Status"),
+        RelayCommand(ACTION_TEST_MESSAGE, "Test message", "Test message"),
         RelayCommand(ACTION_SHORTER, "Shorter", "Shorter"),
         RelayCommand(ACTION_CHECK_RUN, "Check run", "Check run"),
         RelayCommand(ACTION_SEND_LINK, "Send link", "Send link")
