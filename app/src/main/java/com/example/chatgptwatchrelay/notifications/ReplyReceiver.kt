@@ -19,6 +19,11 @@ class ReplyReceiver : BroadcastReceiver() {
             return
         }
 
+        NotificationHelper.dismissResponseNotification(context)
+        if (DuplicateActionGuard.shouldIgnore("reply", reply)) {
+            Toast.makeText(context, "Duplicate reply ignored", Toast.LENGTH_SHORT).show()
+            return
+        }
         ChatGptCommandSender.queueCommand(context, reply, "reply")
         Toast.makeText(context, "Sending reply to ChatGPT", Toast.LENGTH_SHORT).show()
     }
