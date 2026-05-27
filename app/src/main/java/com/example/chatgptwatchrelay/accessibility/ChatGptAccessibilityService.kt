@@ -5,13 +5,13 @@ import android.view.accessibility.AccessibilityEvent
 import com.example.chatgptwatchrelay.notifications.NotificationHelper
 import com.example.chatgptwatchrelay.relay.RelayDiagnostics
 import com.example.chatgptwatchrelay.relay.RelayState
+import com.example.chatgptwatchrelay.relay.ResponseCaptureState
 
 class ChatGptAccessibilityService : AccessibilityService() {
     private var observedSessionId = -1L
     private var baselineResponse = ""
-    private var candidateResponse = ""
-    private var stableCount = 0
-    private var sawResponseChangeAfterBaseline = false
+    private var bestCandidateResponse = ""
+    private var stableEndControlCount = 0
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString().orEmpty()
@@ -28,41 +28,51 @@ class ChatGptAccessibilityService : AccessibilityService() {
         RelayDiagnostics.updateScreenSnapshot(packageName, snapshot.allVisibleText)
         val responseText = snapshot.likelyLatestResponse.trim()
         RelayDiagnostics.updateLikelyResponse(responseText, snapshot.responseLineCount)
-        if (responseText.length < MIN_RESPONSE_CHARS) return
 
         if (observedSessionId != RelayState.monitoringSessionId) {
             observedSessionId = RelayState.monitoringSessionId
             baselineResponse = responseText
-            candidateResponse = ""
-            stableCount = 0
-            sawResponseChangeAfterBaseline = false
-            RelayDiagnostics.commandQueued("Monitoring baseline captured")
+            bestCandidateResponse = ""
+            stableEndControlCount = 0
+            RelayDiagnostics.commandQueued("Response capture armed")
             return
         }
 
-        if (!sawResponseChangeAfterBaseline) {
-            if (isMeaningfullyDifferent(responseText, baselineResponse)) {
-                sawResponseChangeAfterBaseline = true
-                candidateResponse = responseText
-                stableCount = 0
-                RelayDiagnostics.commandQueued("New response candidate detected")
+        if (responseText.length < MIN_RESPONSE_CHARS) return
+
+        when (RelayState.captureState) {
+            ResponseCaptureState.IDLE,
+            ResponseCaptureState.NOTIFIED -> return
+
+            ResponseCaptureState.WAITING_FOR_NEW_RESPONSE -> {
+                if (isMeaningfullyDifferent(responseText, baselineResponse)) {
+                    bestCandidateResponse = responseText
+                    stableEndControlCount = 0
+                    RelayState.markCapturing()
+                    RelayDiagnostics.commandQueued("Capturing new response")
+                }
             }
-            return
-        }
 
-        if (responseText == candidateResponse) {
-            stableCount++
-        } else {
-            candidateResponse = responseText
-            stableCount = 0
-        }
+            ResponseCaptureState.CAPTURING -> {
+                if (responseText.length > bestCandidateResponse.length || !bestCandidateResponse.contains(responseText)) {
+                    bestCandidateResponse = responseText
+                    stableEndControlCount = 0
+                }
 
-        val fingerprint = candidateResponse.hashCode()
-        if (stableCount >= STABLE_EVENT_THRESHOLD && RelayState.canNotifyResponse(fingerprint)) {
-            RelayState.setResponse(candidateResponse)
-            NotificationHelper.showResponseNotification(this)
-            RelayState.monitoringEnabled = false
-            stableCount = 0
+                if (snapshot.hasResponseEndControls && bestCandidateResponse.length >= MIN_RESPONSE_CHARS) {
+                    stableEndControlCount++
+                } else {
+                    stableEndControlCount = 0
+                }
+
+                val fingerprint = bestCandidateResponse.hashCode()
+                if (stableEndControlCount >= END_CONTROL_STABLE_EVENTS && RelayState.canNotifyResponse(fingerprint)) {
+                    RelayState.setResponse(bestCandidateResponse)
+                    NotificationHelper.showResponseNotification(this)
+                    RelayState.monitoringEnabled = false
+                    stableEndControlCount = 0
+                }
+            }
         }
     }
 
@@ -70,18 +80,12 @@ class ChatGptAccessibilityService : AccessibilityService() {
 
     private fun isMeaningfullyDifferent(current: String, baseline: String): Boolean {
         if (baseline.isBlank()) return current.length >= MIN_RESPONSE_CHARS
-        if (current == baseline) return false
         val currentNormalized = current.normalizeForCompare()
         val baselineNormalized = baseline.normalizeForCompare()
         if (currentNormalized == baselineNormalized) return false
-        if (currentNormalized.contains(baselineNormalized) && currentNormalized.length - baselineNormalized.length < MIN_NEW_TEXT_CHARS) {
-            return false
-        }
-        if (baselineNormalized.contains(currentNormalized) && baselineNormalized.length - currentNormalized.length < MIN_NEW_TEXT_CHARS) {
-            return false
-        }
         return currentNormalized.length >= MIN_RESPONSE_CHARS &&
-            kotlin.math.abs(currentNormalized.length - baselineNormalized.length) >= MIN_NEW_TEXT_CHARS
+            !baselineNormalized.contains(currentNormalized) &&
+            !currentNormalized.endsWith(baselineNormalized)
     }
 
     private fun String.normalizeForCompare(): String =
@@ -94,7 +98,6 @@ class ChatGptAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val MIN_RESPONSE_CHARS = 40
-        private const val MIN_NEW_TEXT_CHARS = 30
-        private const val STABLE_EVENT_THRESHOLD = 5
+        private const val END_CONTROL_STABLE_EVENTS = 2
     }
 }
