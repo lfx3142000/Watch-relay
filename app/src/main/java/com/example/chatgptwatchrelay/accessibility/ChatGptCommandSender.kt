@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.chatgptwatchrelay.launch.ChatGptLauncher
@@ -37,7 +36,7 @@ object ChatGptCommandSender {
         copyToClipboard(context, trimmed, source)
         pendingCommand = PendingCommand(text = trimmed, source = source)
         RelayDiagnostics.commandQueued(source)
-        RelayState.monitoringEnabled = true
+        RelayState.monitoringEnabled = false
         ChatGptLauncher.open(context)
     }
 
@@ -114,7 +113,7 @@ object ChatGptCommandSender {
         if (sent) {
             pendingCommand = null
             RelayDiagnostics.commandSent()
-            RelayState.monitoringEnabled = true
+            RelayState.startCaptureAfterSend()
         } else {
             RelayDiagnostics.commandQueued("${pending.source} Send button found but click failed")
         }
@@ -145,14 +144,6 @@ object ChatGptCommandSender {
             )
         }
         return inputNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-    }
-
-    private fun performImeEnter(inputNode: AccessibilityNodeInfo): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            inputNode.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
-        } else {
-            false
-        }
     }
 
     private fun clickNodeOrClickableParent(node: AccessibilityNodeInfo): Boolean {
