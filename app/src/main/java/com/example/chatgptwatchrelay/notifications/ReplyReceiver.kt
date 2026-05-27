@@ -19,6 +19,7 @@ class ReplyReceiver : BroadcastReceiver() {
             return
         }
 
+        NotificationHelper.dismissResponseNotification(context)
         ChatGptCommandSender.queueCommand(context, reply, "reply")
         Toast.makeText(context, "Sending reply to ChatGPT", Toast.LENGTH_SHORT).show()
     }
