@@ -1,12 +1,9 @@
 package com.example.chatgptwatchrelay.accessibility
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.graphics.Path
-import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
@@ -28,7 +25,7 @@ object ChatGptCommandSender {
         var verifiedInInput: Boolean = false,
         var sendAttemptedAfterVerification: Boolean = false,
         var attempts: Int = 0,
-        var lastInputBounds: Rect? = null
+        var lastInputText: String = ""
     )
 
     private var pendingCommand: PendingCommand? = null
@@ -65,13 +62,13 @@ object ChatGptCommandSender {
 
         val root = service.rootInActiveWindow ?: return false
         val inputCandidates = findInputCandidates(root)
-        val sendCandidatesBefore = findSendCandidates(root)
-        RelayDiagnostics.updateCommandCandidates(inputCandidates.size, sendCandidatesBefore.size)
+        val sendCandidates = findExplicitSendCandidates(root)
+        RelayDiagnostics.updateCommandCandidates(inputCandidates.size, sendCandidates.size)
         val inputNode = chooseInputCandidate(inputCandidates)
 
         if (inputNode != null) {
-            pending.lastInputBounds = Rect().also { inputNode.getBoundsInScreen(it) }
-            if (inputLooksPopulated(inputNode, pending.text) || sendCandidatesBefore.isNotEmpty()) {
+            pending.lastInputText = inputNode.text?.toString().orEmpty().trim()
+            if (inputLooksPopulated(inputNode, pending.text)) {
                 pending.verifiedInInput = true
             }
         }
@@ -80,7 +77,6 @@ object ChatGptCommandSender {
             if (inputNode == null) return false
             inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            tapInputCenter(service, pending.lastInputBounds)
             pending.focusTapped = true
             RelayDiagnostics.commandQueued("${pending.source} focused ChatGPT input")
             return false
@@ -91,42 +87,46 @@ object ChatGptCommandSender {
             inputNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             inputNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
-            val pasted = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-            pending.pasteAttempted = pending.pasteAttempted || pasted
+            if (!pending.pasteAttempted) {
+                val pasted = inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                pending.pasteAttempted = true
 
-            if (!pasted && pending.attempts >= 8) {
-                // Last-resort fallback only. ACTION_SET_TEXT can update the Accessibility
-                // node without committing to ChatGPT's real Compose text state, so do not
-                // trust it as proof that the message box is populated.
-                setInputText(inputNode, pending.text)
+                if (!pasted && pending.attempts >= 8) {
+                    setInputText(inputNode, pending.text)
+                }
+
+                RelayDiagnostics.commandQueued("${pending.source} paste attempted once; waiting for send button")
+            } else {
+                RelayDiagnostics.commandQueued("${pending.source} waiting for ChatGPT send button")
             }
-
-            performImeEnter(inputNode)
-            RelayDiagnostics.commandQueued("${pending.source} paste attempted; waiting for ChatGPT input")
             return false
         }
 
-        val currentRoot = service.rootInActiveWindow ?: root
-        val sendCandidates = findSendCandidates(currentRoot)
-        RelayDiagnostics.updateCommandCandidates(inputCandidates.size, sendCandidates.size)
-        val sendNode = sendCandidates.lastOrNull()
-        pending.sendAttemptedAfterVerification = true
-        val sent = if (sendNode != null) {
-            sendNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        } else {
-            tapLikelySendButton(service, currentRoot, pending.lastInputBounds)
+        if (sendCandidates.isEmpty()) {
+            RelayDiagnostics.commandQueued("${pending.source} waiting for explicit Send button")
+            return false
         }
+
+        val sendNode = chooseSendCandidate(sendCandidates)
+        pending.sendAttemptedAfterVerification = true
+        val sent = sendNode?.let { clickNodeOrClickableParent(it) } == true
 
         if (sent) {
             pendingCommand = null
             RelayDiagnostics.commandSent()
             RelayState.monitoringEnabled = true
+        } else {
+            RelayDiagnostics.commandQueued("${pending.source} Send button found but click failed")
         }
         return sent
     }
 
     private fun chooseInputCandidate(candidates: List<AccessibilityNodeInfo>): AccessibilityNodeInfo? {
         return candidates.lastOrNull { it.isEditable } ?: candidates.lastOrNull()
+    }
+
+    private fun chooseSendCandidate(candidates: List<AccessibilityNodeInfo>): AccessibilityNodeInfo? {
+        return candidates.lastOrNull()
     }
 
     private fun inputLooksPopulated(inputNode: AccessibilityNodeInfo, commandText: String): Boolean {
@@ -155,31 +155,16 @@ object ChatGptCommandSender {
         }
     }
 
-    private fun tapInputCenter(service: AccessibilityService, inputBounds: Rect?): Boolean {
-        if (inputBounds == null || inputBounds.isEmpty) return false
-        return tap(service, inputBounds.centerX().toFloat(), inputBounds.centerY().toFloat(), 60)
-    }
-
-    private fun tapLikelySendButton(
-        service: AccessibilityService,
-        root: AccessibilityNodeInfo,
-        inputBounds: Rect?
-    ): Boolean {
-        val rootBounds = Rect().also { root.getBoundsInScreen(it) }
-        val y = when {
-            inputBounds != null && !inputBounds.isEmpty -> inputBounds.centerY().toFloat()
-            else -> rootBounds.bottom - 72f
+    private fun clickNodeOrClickableParent(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        repeat(4) {
+            val target = current ?: return false
+            if (target.isVisibleToUser && target.isEnabled && target.isClickable) {
+                if (target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+            }
+            current = target.parent
         }
-        val x = rootBounds.right - 56f
-        return tap(service, x, y, 80)
-    }
-
-    private fun tap(service: AccessibilityService, x: Float, y: Float, durationMillis: Long): Boolean {
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, durationMillis))
-            .build()
-        return service.dispatchGesture(gesture, null, null)
+        return false
     }
 
     private fun copyToClipboard(context: Context, text: String, source: String) {
@@ -207,38 +192,31 @@ object ChatGptCommandSender {
         return candidates
     }
 
-    private fun findSendCandidates(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
-        val explicitCandidates = mutableListOf<AccessibilityNodeInfo>()
-        val fallbackCandidates = mutableListOf<AccessibilityNodeInfo>()
-        val rootBounds = Rect().also { root.getBoundsInScreen(it) }
-        val rootHeight = rootBounds.height().coerceAtLeast(1)
-        val rootWidth = rootBounds.width().coerceAtLeast(1)
-
+    private fun findExplicitSendCandidates(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
+        val candidates = mutableListOf<AccessibilityNodeInfo>()
         root.visit { node ->
-            if (!node.isVisibleToUser || !node.isClickable || !node.isEnabled) return@visit
+            if (!node.isVisibleToUser || !node.isEnabled) return@visit
             val text = node.text?.toString().orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
-            val className = node.className?.toString().orEmpty()
-            val label = "$text $desc"
+            val label = "$text $desc".trim()
+            val lower = label.lowercase()
 
-            if (label.contains("send", ignoreCase = true) || label.contains("submit", ignoreCase = true)) {
-                explicitCandidates += node
-                return@visit
-            }
+            val isSend = lower == "send" ||
+                lower == "submit" ||
+                lower.contains("send message") ||
+                lower.contains("submit message") ||
+                lower.contains("send prompt")
 
-            val bounds = Rect().also { node.getBoundsInScreen(it) }
-            val isBottomArea = bounds.top > rootBounds.top + (rootHeight * 0.55)
-            val isRightArea = bounds.left > rootBounds.left + (rootWidth * 0.55)
-            val isButtonish = className.contains("Button", ignoreCase = true) ||
-                className.contains("Image", ignoreCase = true) ||
-                desc.isNotBlank()
-            val reasonableSize = bounds.width() in 24..260 && bounds.height() in 24..260
+            val isVoice = lower.contains("voice") ||
+                lower.contains("microphone") ||
+                lower.contains("dictate") ||
+                lower.contains("record")
 
-            if (isBottomArea && isRightArea && isButtonish && reasonableSize) {
-                fallbackCandidates += node
+            if (isSend && !isVoice) {
+                candidates += node
             }
         }
-        return if (explicitCandidates.isNotEmpty()) explicitCandidates else fallbackCandidates
+        return candidates
     }
 
     private fun AccessibilityNodeInfo.visit(block: (AccessibilityNodeInfo) -> Unit) {
