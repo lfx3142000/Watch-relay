@@ -15,7 +15,7 @@ object NotificationHelper {
     const val RESPONSE_NOTIFICATION_ID = 1001
     const val COMMAND_STATUS_NOTIFICATION_ID = 1002
     const val KEY_REPLY_TEXT = "reply_text"
-    private const val WATCH_TEXT_LIMIT = 180
+    private const val WATCH_TEXT_LIMIT = 140
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -41,9 +41,11 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("ChatGPT done — $index/$total")
             .setContentText(watchText)
-            .setStyle(android.app.Notification.BigTextStyle().bigText(watchText))
             .setAutoCancel(true)
             .setOngoing(false)
+            .setLocalOnly(false)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+            .setCategory(android.app.Notification.CATEGORY_MESSAGE)
             .setDeleteIntent(pendingIntent(context, CommandRepository.ACTION_DISMISS))
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_STATUS, "Status"))
