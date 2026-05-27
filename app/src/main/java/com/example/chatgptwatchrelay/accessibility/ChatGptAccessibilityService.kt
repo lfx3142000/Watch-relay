@@ -38,6 +38,11 @@ class ChatGptAccessibilityService : AccessibilityService() {
         if (stableCount >= 4 && RelayState.canNotifyResponse(fingerprint)) {
             RelayState.setResponse(responseText)
             NotificationHelper.showResponseNotification(this)
+            // Prevent scrolling or small visible text changes from creating more notifications
+            // for the same completed answer. Monitoring resumes when the user sends a command,
+            // sends a reply, or manually starts monitoring again.
+            RelayState.monitoringEnabled = false
+            stableCount = 0
         }
     }
 
