@@ -1,0 +1,1 @@
+Trigger APK build for short commands and send tap retargeting.
