@@ -9,6 +9,7 @@ object RelayState {
     var notifyOnceEnabled: Boolean = true
     var hasNotifiedThisSession: Boolean = false
     var lastNotifiedFingerprint: Int = 0
+    var monitoringSessionId: Long = 0L
 
     fun setResponse(text: String, markNotified: Boolean = true) {
         lastFullResponse = text.trim()
@@ -24,6 +25,7 @@ object RelayState {
     fun startMonitoring() {
         monitoringEnabled = true
         hasNotifiedThisSession = false
+        monitoringSessionId++
     }
 
     fun stopMonitoring() {
@@ -33,10 +35,12 @@ object RelayState {
     fun stopNotifications() {
         monitoringEnabled = false
         hasNotifiedThisSession = false
+        monitoringSessionId++
     }
 
     fun canNotifyResponse(fingerprint: Int): Boolean {
         if (!monitoringEnabled) return false
+        if (notifyOnceEnabled && hasNotifiedThisSession) return false
         return !notifyOnceEnabled || fingerprint != lastNotifiedFingerprint
     }
 
