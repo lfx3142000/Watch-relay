@@ -7,7 +7,8 @@ object ChatGptScreenReader {
         val allVisibleText: String,
         val likelyLatestResponse: String,
         val visibleLineCount: Int,
-        val responseLineCount: Int
+        val responseLineCount: Int,
+        val hasResponseEndControls: Boolean
     )
 
     fun read(root: AccessibilityNodeInfo?): ScreenSnapshot {
@@ -18,7 +19,8 @@ object ChatGptScreenReader {
             allVisibleText = allText,
             likelyLatestResponse = responseLines.joinToString("\n").trim(),
             visibleLineCount = lines.size,
-            responseLineCount = responseLines.size
+            responseLineCount = responseLines.size,
+            hasResponseEndControls = hasResponseEndControls(lines)
         )
     }
 
@@ -58,9 +60,36 @@ object ChatGptScreenReader {
             .filterNot { isLikelyButtonOnlyLine(it) }
 
         return when {
-            cleaned.size <= 16 -> cleaned
-            else -> cleaned.takeLast(16)
+            cleaned.size <= 28 -> cleaned
+            else -> cleaned.takeLast(28)
         }
+    }
+
+    private fun hasResponseEndControls(lines: List<String>): Boolean {
+        val normalized = lines.map { it.lowercase().replace(Regex("\\s+"), " ").trim() }
+        val hasPositiveFeedback = normalized.any {
+            it == "good response" ||
+                it.contains("good response") ||
+                it.contains("thumbs up") ||
+                it.contains("like")
+        }
+        val hasNegativeFeedback = normalized.any {
+            it == "bad response" ||
+                it.contains("bad response") ||
+                it.contains("thumbs down") ||
+                it.contains("dislike")
+        }
+        val hasSourceOrCopyControl = normalized.any {
+            it == "copy" ||
+                it.contains("copy") ||
+                it.contains("sources") ||
+                it.contains("source") ||
+                it.contains("citations") ||
+                it.contains("read aloud") ||
+                it.contains("share")
+        }
+        return (hasPositiveFeedback && hasNegativeFeedback) ||
+            ((hasPositiveFeedback || hasNegativeFeedback) && hasSourceOrCopyControl)
     }
 
     private fun isUiChromeLine(line: String): Boolean {
@@ -106,7 +135,7 @@ object ChatGptScreenReader {
     private fun isLikelyButtonOnlyLine(line: String): Boolean {
         val normalized = line.lowercase()
         if (line.length > 40) return false
-        val buttonWords = listOf("send", "copy", "share", "retry", "continue", "stop", "voice", "attach")
+        val buttonWords = listOf("send", "copy", "share", "retry", "continue", "stop", "voice", "attach", "read aloud", "good response", "bad response")
         return buttonWords.any { normalized == it || normalized.startsWith("$it ") }
     }
 
