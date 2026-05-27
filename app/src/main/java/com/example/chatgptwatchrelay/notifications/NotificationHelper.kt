@@ -50,6 +50,7 @@ object NotificationHelper {
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_STATUS, "Status"))
             .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop monitor"))
+            .addAction(action(context, CommandRepository.ACTION_TEST_MESSAGE, "Test message"))
             .addAction(action(context, CommandRepository.ACTION_SHORTER, "Shorter"))
             .addAction(action(context, CommandRepository.ACTION_CHECK_RUN, "Check run"))
             .addAction(action(context, CommandRepository.ACTION_SEND_LINK, "Send link"))
@@ -57,6 +58,11 @@ object NotificationHelper {
 
         context.getSystemService(NotificationManager::class.java)
             .notify(RESPONSE_NOTIFICATION_ID, builder.build())
+    }
+
+    fun dismissResponseNotification(context: Context) {
+        context.getSystemService(NotificationManager::class.java)
+            .cancel(RESPONSE_NOTIFICATION_ID)
     }
 
     fun showCommandFailureNotification(context: Context, reason: String) {
