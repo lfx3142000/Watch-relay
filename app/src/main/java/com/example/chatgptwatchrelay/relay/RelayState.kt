@@ -18,6 +18,7 @@ object RelayState {
     var lastNotifiedFingerprint: Int = 0
     var monitoringSessionId: Long = 0L
     var captureState: ResponseCaptureState = ResponseCaptureState.IDLE
+    var lastSentCommandText: String = ""
 
     fun setResponse(text: String, markNotified: Boolean = true) {
         lastFullResponse = text.trim()
@@ -34,13 +35,15 @@ object RelayState {
     fun startMonitoring() {
         monitoringEnabled = true
         hasNotifiedThisSession = false
+        lastSentCommandText = ""
         monitoringSessionId++
         captureState = ResponseCaptureState.WAITING_FOR_NEW_RESPONSE
     }
 
-    fun startCaptureAfterSend() {
+    fun startCaptureAfterSend(commandText: String = "") {
         monitoringEnabled = true
         hasNotifiedThisSession = false
+        lastSentCommandText = commandText.trim()
         monitoringSessionId++
         captureState = ResponseCaptureState.WAITING_FOR_NEW_RESPONSE
     }
@@ -57,6 +60,7 @@ object RelayState {
     fun stopNotifications() {
         monitoringEnabled = false
         hasNotifiedThisSession = false
+        lastSentCommandText = ""
         monitoringSessionId++
         captureState = ResponseCaptureState.IDLE
     }
