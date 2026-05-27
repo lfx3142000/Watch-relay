@@ -15,6 +15,7 @@ object NotificationHelper {
     const val RESPONSE_NOTIFICATION_ID = 1001
     const val COMMAND_STATUS_NOTIFICATION_ID = 1002
     const val KEY_REPLY_TEXT = "reply_text"
+    private const val WATCH_TEXT_LIMIT = 180
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -33,22 +34,23 @@ object NotificationHelper {
         val total = RelayState.chunks.size.coerceAtLeast(1)
         val index = RelayState.currentChunkIndex + 1
         val baseText = RelayState.currentChunk().ifBlank { "No response captured yet." }
-        val text = if (index >= total) "$baseText\n\nEnd of response." else baseText
+        val fullText = if (index >= total) "$baseText\n\nEnd of response." else baseText
+        val watchText = fullText.toWatchSnippet()
 
         val builder = android.app.Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("ChatGPT done — $index/$total")
-            .setContentText(text.take(120))
-            .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+            .setContentText(watchText)
+            .setStyle(android.app.Notification.BigTextStyle().bigText(watchText))
             .setAutoCancel(true)
             .setOngoing(false)
             .setDeleteIntent(pendingIntent(context, CommandRepository.ACTION_DISMISS))
             .addAction(action(context, CommandRepository.ACTION_CONTINUE, "Continue"))
             .addAction(action(context, CommandRepository.ACTION_STATUS, "Status"))
+            .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop monitor"))
             .addAction(action(context, CommandRepository.ACTION_SHORTER, "Shorter"))
             .addAction(action(context, CommandRepository.ACTION_CHECK_RUN, "Check run"))
             .addAction(action(context, CommandRepository.ACTION_SEND_LINK, "Send link"))
-            .addAction(action(context, CommandRepository.ACTION_STOP_MONITORING, "Stop"))
             .addAction(replyAction(context))
 
         context.getSystemService(NotificationManager::class.java)
@@ -98,5 +100,11 @@ object NotificationHelper {
         return android.app.Notification.Action.Builder(android.R.drawable.ic_btn_speak_now, "Reply", pendingIntent)
             .addRemoteInput(remoteInput)
             .build()
+    }
+
+    private fun String.toWatchSnippet(): String {
+        val oneLine = replace(Regex("\\s+"), " ").trim()
+        if (oneLine.length <= WATCH_TEXT_LIMIT) return oneLine
+        return oneLine.take(WATCH_TEXT_LIMIT - 1).trimEnd() + "…"
     }
 }
