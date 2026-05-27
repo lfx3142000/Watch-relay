@@ -6,7 +6,7 @@
 **Repository:** `lfx3142000/Watch-relay`  
 **Goal:** Build an Android phone app that automatically detects when ChatGPT finishes responding, sends the readable response to a Samsung Galaxy Watch, and lets the user send preset or voice/custom replies from the watch back into the same ChatGPT conversation.
 
-**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It includes retry/timeout handling and posts a failure notification if the command cannot be sent. The app records and displays basic diagnostics for package, captured text, likely response text, input candidates, send candidates, and command status. A first-pass `ChatGptScreenReader` now filters common UI chrome and uses a tail-of-conversation heuristic to extract likely latest response text instead of sending all visible screen text. This still needs real-device testing and more robust ChatGPT UI detection.
+**Current status:** Initial Android shell builds in CI. Notification relay, watch actions, inline reply receiver, manual share fallback, basic Accessibility monitoring, and a first-pass Accessibility command sender are in place. The sender queues preset/custom watch replies, opens ChatGPT, attempts to focus the message box, paste/set command text, and tap a detected Send control. It includes retry/timeout handling and posts a failure notification if the command cannot be sent. The app records and displays basic diagnostics for package, captured text, likely response text, input candidates, send candidates, and command status. A first-pass `ChatGptScreenReader` now filters common UI chrome and uses a tail-of-conversation heuristic to extract likely latest response text instead of sending all visible screen text. Recent user testing indicates that sending can work, but multi-line or overly long preset command text may prevent the Accessibility sender from finding or enabling the ChatGPT Send button. Short one-line command text is now the top reliability priority.
 
 **Critical MVP decision:** The MVP must include an automatic relay loop. Manual share/copy is allowed only as a fallback/debug path, not as the primary MVP.
 
@@ -24,7 +24,7 @@ The MVP is successful only when this end-to-end loop works on an Android phone p
 5. Relay app sends a watch-readable notification with the first response chunk.
 6. Galaxy Watch displays the response notification.
 7. User can tap More to read additional chunks.
-8. User can tap preset actions such as Continue, Summarize, Shorter, or Open.
+8. User can tap short one-line preset actions such as Continue, Status, Did you finish?, Send link, or Stop monitoring.
 9. User can send a custom reply through notification inline reply when supported.
 10. Relay app sends the selected preset command or custom reply back into the active ChatGPT conversation.
 11. Relay app returns to monitoring for the next response.
@@ -46,6 +46,29 @@ Manual import/share/copy features are useful fallback features, but they do not 
 - Full lock-screen operation is a future enhancement, not MVP.
 - UI automation may break if ChatGPT changes its app/web layout.
 - The app must always include a fallback mode when automation fails.
+- Preset command text must be very short and one line only. Multi-line response/command text can make the ChatGPT compose field taller or shift UI elements, causing the Accessibility sender to miss the Send button.
+
+---
+
+## Current top reliability priority
+
+Shorten all preset watch commands before additional deep tuning.
+
+Use these short command strings unless testing shows a better option:
+
+- `Continue`
+- `Status`
+- `Did you finish?`
+- `Send link`
+- `Stop monitoring`
+
+Implementation notes:
+
+- Do not insert multi-line preset command text into ChatGPT.
+- Do not add explanatory text to preset commands.
+- Keep custom/voice replies as user-entered text, but preset buttons should stay one-line.
+- After inserting text, verify the ChatGPT Send button is visible/enabled before tapping.
+- If the Send button is not found, record diagnostics that include command length, whether the command contained newline characters, input candidate count, and send candidate count.
 
 ---
 
@@ -212,9 +235,10 @@ Started.
 - [x] Create notification body with current chunk.
 - [x] Add notification action: `More`.
 - [x] Add notification action: `Continue`.
-- [x] Add notification action: `Summarize`.
-- [x] Add notification action: `Shorter`.
-- [x] Add notification action: `Open`.
+- [x] Add notification action: `Status`.
+- [x] Add notification action: `Did you finish?`.
+- [x] Add notification action: `Send link`.
+- [x] Add notification action: `Stop monitoring`.
 - [x] Add notification action: `Reply` using RemoteInput.
 - [x] Add final chunk state: `End of response`.
 - [x] Add fallback for short responses.
@@ -225,12 +249,15 @@ Started.
 
 ## Status
 
-Implemented first-pass auto-send path; needs real-device testing and better diagnostics.
+Implemented first-pass auto-send path; needs short-command cleanup, real-device testing, and better diagnostics.
 
 ## Tasks
 
 - [x] Create `CommandRepository.kt`.
 - [x] Define default preset commands.
+- [ ] Replace any long or multi-line preset commands with short one-line commands: `Continue`, `Status`, `Did you finish?`, `Send link`, and `Stop monitoring`.
+- [ ] Add guard/test to ensure preset command strings contain no newline characters.
+- [ ] Add diagnostics for command length and newline presence when a send attempt fails.
 - [x] Create `CommandReceiver.kt`.
 - [x] Receive notification action taps.
 - [x] Map action taps to command text.
@@ -246,7 +273,10 @@ Implemented first-pass auto-send path; needs real-device testing and better diag
 - [x] Add failure notification if command could not be sent.
 - [x] Add diagnostics for detected input/send candidates.
 - [ ] Real-device test: Continue from watch sends into ChatGPT.
-- [ ] Real-device test: Summarize from watch sends into ChatGPT.
+- [ ] Real-device test: Status from watch sends into ChatGPT.
+- [ ] Real-device test: Did you finish? from watch sends into ChatGPT.
+- [ ] Real-device test: Send link from watch sends into ChatGPT.
+- [ ] Real-device test: Stop monitoring from watch stops monitoring without inserting text into ChatGPT unless intentionally designed otherwise.
 
 ---
 
@@ -277,4 +307,4 @@ Implemented first-pass auto-send path; needs real-device testing.
 
 # Current next step
 
-Run normal Android Build on `main` after screen-reader changes. If compile passes, proceed to real-device testing and use diagnostics to tune `ChatGptScreenReader` against the actual ChatGPT app and Chrome accessibility node text.
+Update `CommandRepository.kt` and notification action labels so preset watch commands are short one-line strings only: `Continue`, `Status`, `Did you finish?`, `Send link`, and `Stop monitoring`. Build on `main`, install as an update, and test whether short commands allow the Accessibility sender to keep finding/enabling the ChatGPT Send button reliably.
