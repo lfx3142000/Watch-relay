@@ -12,7 +12,10 @@ class ChatGptAccessibilityService : AccessibilityService() {
     private var baselineResponse = ""
     private var bestCandidateResponse = ""
     private var stableEndControlCount = 0
+    private var stableTextDoneCount = 0
+    private var lastCandidateSnapshot = ""
     private var captureStartedAtMillis = 0L
+    private var sawGeneratingControl = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString().orEmpty()
@@ -34,11 +37,16 @@ class ChatGptAccessibilityService : AccessibilityService() {
             observedSessionId = RelayState.monitoringSessionId
             baselineResponse = responseText
             bestCandidateResponse = ""
+            lastCandidateSnapshot = ""
             stableEndControlCount = 0
+            stableTextDoneCount = 0
+            sawGeneratingControl = false
             captureStartedAtMillis = System.currentTimeMillis()
             RelayDiagnostics.commandQueued("Response capture armed")
             return
         }
+
+        if (snapshot.hasGeneratingControl) sawGeneratingControl = true
 
         if (RelayState.lastSentCommandText.isNotBlank() && snapshot.sentCommandBottomY <= 0) {
             RelayDiagnostics.commandQueued("Waiting to locate sent message on screen")
@@ -59,7 +67,9 @@ class ChatGptAccessibilityService : AccessibilityService() {
             ResponseCaptureState.WAITING_FOR_NEW_RESPONSE -> {
                 if (isMeaningfullyDifferent(responseText, baselineResponse)) {
                     bestCandidateResponse = responseText
+                    lastCandidateSnapshot = responseText
                     stableEndControlCount = 0
+                    stableTextDoneCount = 0
                     RelayState.markCapturing()
                     RelayDiagnostics.commandQueued("Capturing new response below sent message")
                 }
@@ -71,18 +81,31 @@ class ChatGptAccessibilityService : AccessibilityService() {
                     stableEndControlCount = 0
                 }
 
+                if (responseText == lastCandidateSnapshot) {
+                    if (!snapshot.hasGeneratingControl) stableTextDoneCount++
+                } else {
+                    lastCandidateSnapshot = responseText
+                    stableTextDoneCount = 0
+                }
+
                 if (snapshot.hasResponseEndControls && bestCandidateResponse.length >= MIN_RESPONSE_CHARS) {
                     stableEndControlCount++
                 } else {
                     stableEndControlCount = 0
                 }
 
+                val endControlsReady = stableEndControlCount >= END_CONTROL_STABLE_EVENTS
+                val longResponseStableReady = stableTextDoneCount >= STABLE_TEXT_DONE_EVENTS &&
+                    !snapshot.hasGeneratingControl &&
+                    System.currentTimeMillis() - captureStartedAtMillis >= MIN_LONG_RESPONSE_WAIT_MILLIS
+
                 val fingerprint = bestCandidateResponse.hashCode()
-                if (stableEndControlCount >= END_CONTROL_STABLE_EVENTS && RelayState.canNotifyResponse(fingerprint)) {
+                if ((endControlsReady || longResponseStableReady) && RelayState.canNotifyResponse(fingerprint)) {
                     RelayState.setResponse(bestCandidateResponse)
                     NotificationHelper.showResponseNotification(this)
                     RelayState.monitoringEnabled = false
                     stableEndControlCount = 0
+                    stableTextDoneCount = 0
                 }
             }
         }
@@ -118,6 +141,8 @@ class ChatGptAccessibilityService : AccessibilityService() {
     companion object {
         private const val MIN_RESPONSE_CHARS = 40
         private const val END_CONTROL_STABLE_EVENTS = 2
+        private const val STABLE_TEXT_DONE_EVENTS = 5
         private const val POST_SEND_GRACE_MILLIS = 1_800L
+        private const val MIN_LONG_RESPONSE_WAIT_MILLIS = 8_000L
     }
 }
