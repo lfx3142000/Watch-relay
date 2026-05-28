@@ -10,6 +10,7 @@ object ChatGptScreenReader {
         val visibleLineCount: Int,
         val responseLineCount: Int,
         val hasResponseEndControls: Boolean,
+        val hasGeneratingControl: Boolean,
         val sentCommandBottomY: Int
     )
 
@@ -36,6 +37,7 @@ object ChatGptScreenReader {
             visibleLineCount = lines.size,
             responseLineCount = responseLines.size,
             hasResponseEndControls = hasResponseEndControlsBelow(uiLines, sentCommandBottomY),
+            hasGeneratingControl = hasGeneratingControl(lines),
             sentCommandBottomY = sentCommandBottomY
         )
     }
@@ -126,6 +128,19 @@ object ChatGptScreenReader {
         }
         return (hasPositiveFeedback && hasNegativeFeedback) ||
             ((hasPositiveFeedback || hasNegativeFeedback) && hasSourceOrCopyControl)
+    }
+
+    private fun hasGeneratingControl(lines: List<String>): Boolean {
+        val normalized = lines.map { it.normalizeForCompare() }
+        return normalized.any {
+            it == "stop" ||
+                it == "stop generating" ||
+                it == "stop response" ||
+                it.contains("stop generating") ||
+                it.contains("stop response") ||
+                it.contains("interrupt") ||
+                it.contains("generating")
+        }
     }
 
     private fun isUiChromeLine(line: String): Boolean {
